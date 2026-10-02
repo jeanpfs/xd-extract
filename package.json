@@ -1,0 +1,28 @@
+{
+  "name": "xd-extract-monorepo",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:live": "XD_LIVE=1 vitest run packages/sources/test/live",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "leakcheck": "node scripts/leakcheck.mjs",
+    "skills:check": "node scripts/check-skills.mjs",
+    "fixtures:fetch": "node scripts/fetch-fixtures.mjs",
+    "build": "pnpm --filter xd-extract build",
+    "xd": "node packages/cli/dist/bin.js",
+    "prepare": "git config core.hooksPath .githooks || true"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@types/node": "26.6.4",
+    "tsup": "8.5.1",
+    "typescript": "7.0.2",
+    "vitest": "5.0.3"
+  }
+}

@@ -1,0 +1,7 @@
+node_modules
+dist
+*.tsbuildinfo
+fixtures/.cache
+fixtures/private
+.leakcheck
+.DS_Store
