@@ -1,11 +1,12 @@
-The documents under fixtures/public/ are anonymised derivatives (names, ids, text and
-fonts removed by `xd redact`; geometry kept) of two files from
+The document under fixtures/public/ is an anonymised derivative (names, ids, text and
+fonts removed by `xd redact`; geometry kept) of one file from
 https://github.com/L2jLiga/xd2svg at commit 937365e71fe735751053e918b3ba02cfa546ce7a:
 
   test/input/single.xd   -> fixtures/public/single/document.json
-  test/input/multi.xd    -> fixtures/public/multi/document.json
 
-Both are redistributed under the MIT License of that project:
+It is redistributed under the MIT License of that project. The MIT License covers the file, not
+any third-party marks a design may contain; this file was chosen because it is a generic website
+template. A second file from the same project (multi.xd) is deliberately not redistributed.
 
 MIT License
 

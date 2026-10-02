@@ -11,7 +11,8 @@ import { loadFixtureDocument } from '@xd-extract/sources';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = join(import.meta.dirname, '../../../fixtures/public');
-const NAMES = ['single', 'multi'] as const;
+const NAMES = ['single'] as const;
+const GOLDEN_MIN_SHAPES = 3;
 const GOLDEN_MAX_SHAPES = 40;
 const GOLDEN_COUNT = 8;
 
@@ -48,8 +49,13 @@ const loaded = await Promise.all(
       for (const r of a.roots)
         shapes.set(`${a.name}-${r.node.name}`.replace(/[^a-z0-9-]/gi, '_'), collectPaintFacts(r.node).shapes);
     const cases = convertAll(artboards);
+    // Richest small roots first: a lone rectangle protects almost nothing.
     const golden = cases
-      .filter((c) => (shapes.get(c.slug) ?? 0) >= 1 && (shapes.get(c.slug) ?? 0) <= GOLDEN_MAX_SHAPES)
+      .filter((c) => {
+        const n = shapes.get(c.slug) ?? 0;
+        return n >= GOLDEN_MIN_SHAPES && n <= GOLDEN_MAX_SHAPES;
+      })
+      .sort((a, b) => (shapes.get(b.slug) ?? 0) - (shapes.get(a.slug) ?? 0))
       .slice(0, GOLDEN_COUNT);
     return { name, cases, golden };
   }),
@@ -70,16 +76,11 @@ describe.each(loaded)('public fixture $name', ({ name, cases, golden }) => {
   });
 });
 
-describe('what the public fixtures exercise', () => {
+describe('what the public fixture exercises', () => {
   it('reports every unsupported feature instead of dropping it silently', () => {
+    // Gradient, filters and style.clipPath do not occur in single.xd; the synthetic tests cover them.
     const codes = new Set(loaded.flatMap((d) => d.cases.flatMap((c) => c.warnings)));
-    for (const expected of [
-      'skipped-text',
-      'unsupported-fill:gradient',
-      'unsupported-fill:pattern',
-      'unsupported-style:filters',
-      'stroke-align-ignored:inside',
-    ]) {
+    for (const expected of ['skipped-text', 'unsupported-fill:pattern', 'stroke-align-ignored:inside']) {
       expect(codes, expected).toContain(expected);
     }
   });

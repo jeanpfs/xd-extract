@@ -192,4 +192,21 @@ describe('redact', () => {
     expect(names).not.toContain('Card');
     expect(readFileSync(join(out, 'document.json'), 'utf8')).not.toContain('Card');
   });
+
+  it('--exclude drops top-level nodes by name before anonymising, and says how many', async () => {
+    const out = join(dir, 'red-excluded');
+    const r = await xdc('redact', xd, '-o', out, '--exclude', 'Card', '--exclude', 'Label');
+    expect(r.code).toBe(0);
+    expect(r.out).toContain('excluded "Card": 1');
+    const inv = await xdc('inventory', join(out, 'document.json'), '--json');
+    expect(JSON.parse(inv.out)).toHaveLength(1);
+  });
+
+  it('--exclude with a name that matches nothing is a usage error and writes nothing', async () => {
+    const out = join(dir, 'red-typo');
+    const r = await xdc('redact', xd, '-o', out, '--exclude', 'Cardd');
+    expect(r.code).toBe(EXIT_CODES.Usage);
+    expect(r.err).toContain('matched no top-level node');
+    expect(existsSync(join(out, 'document.json'))).toBe(false);
+  });
 });

@@ -12,7 +12,7 @@ Usage:
   xd extract   <source> --node <name|id:ID> [--artboard <name|id>] -o <file.svg>
   xd extract   <source> --map <map.json> [-d <dir>]
   xd validate  <file.svg...> [--expect-same-frame] [--json]
-  xd redact    <source> -o <dir>
+  xd redact    <source> -o <dir> [--exclude <top-level node name>]...
 
 <source> is an https://xd.adobe.com/view/... share link, a .xd file, or a document.json from "xd redact".
 Share-link flags: --browser (find the manifest with agent-browser), --record <dir> (save HTTP responses with tokens

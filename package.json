@@ -14,6 +14,7 @@
     "leakcheck": "node scripts/leakcheck.mjs",
     "skills:check": "node scripts/check-skills.mjs",
     "fixtures:fetch": "node scripts/fetch-fixtures.mjs",
+    "fixtures:build": "pnpm fixtures:fetch && pnpm build && pnpm xd redact fixtures/.cache/single.xd -o fixtures/public/single",
     "build": "pnpm --filter xd-extract build",
     "xd": "node packages/cli/dist/bin.js",
     "prepare": "git config core.hooksPath .githooks || true"

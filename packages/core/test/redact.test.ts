@@ -3,7 +3,7 @@ import type { AgcDocument } from '../src/agc';
 import { convertRoot } from '../src/convert';
 import type { XdDocument } from '../src/document';
 import { parseAgc } from '../src/parse';
-import { redactDocument } from '../src/redact';
+import { dropRoots, redactDocument } from '../src/redact';
 
 const T = { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 };
 const agc = {
@@ -141,5 +141,59 @@ describe('redactDocument', () => {
     const before = convertRoot('a', parseAgc(doc.artboards[0]!.agc)[0]!);
     const after = convertRoot('a', parseAgc(red.artboards[0]!.agc)[0]!);
     expect(after.svg).toBe(before.svg);
+  });
+});
+
+describe('dropRoots', () => {
+  const root = (name: string) => ({
+    type: 'group',
+    name,
+    id: `id-${name}`,
+    transform: T,
+    group: { children: [] },
+  });
+  const mk = (): XdDocument => ({
+    source: { kind: 'fixture', ref: 'x' },
+    artboards: [
+      {
+        id: 'a1',
+        name: 'Home',
+        agc: {
+          version: '1.5.0',
+          children: [{ type: 'artboard', artboard: { children: [root('Logo'), root('Card')] } }],
+        } as unknown as AgcDocument,
+      },
+      {
+        id: 'a2',
+        name: 'Cart',
+        agc: {
+          version: '1.5.0',
+          children: [{ type: 'artboard', artboard: { children: [root('Logo')] } }],
+        } as unknown as AgcDocument,
+      },
+      {
+        id: 'pasteboard',
+        name: 'pasteboard',
+        agc: { version: '1.5.0', children: [root('Logo'), root('Loose')] } as unknown as AgcDocument,
+      },
+    ],
+  });
+  const names = (d: XdDocument) => d.artboards.map((a) => parseAgc(a.agc).map((r) => r.node.name));
+
+  it('removes top-level roots by name in every artboard and in the pasteboard, and counts them', () => {
+    const out = dropRoots(mk(), ['Logo']);
+    expect(out.dropped).toEqual({ Logo: 3 });
+    expect(names(out.doc)).toEqual([['Card'], [], ['Loose']]);
+  });
+
+  it('reports a name that matched nothing as 0, so callers can reject typos', () => {
+    expect(dropRoots(mk(), ['Nope']).dropped).toEqual({ Nope: 0 });
+  });
+
+  it('does not mutate the input document', () => {
+    const input = mk();
+    const before = JSON.stringify(input);
+    dropRoots(input, ['Logo', 'Card']);
+    expect(JSON.stringify(input)).toBe(before);
   });
 });

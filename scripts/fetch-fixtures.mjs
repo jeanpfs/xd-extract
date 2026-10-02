@@ -3,9 +3,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 
 const COMMIT = '937365e71fe735751053e918b3ba02cfa546ce7a';
 const RAW = `https://raw.githubusercontent.com/L2jLiga/xd2svg/${COMMIT}/test/input`;
+// Only single.xd (a generic website template). multi.xd is a banking-app mockup full of third-party
+// brand logos, so it is deliberately NOT redistributed, not even anonymised.
 const FILES = [
   { name: 'single.xd', sha256: 'a664b4938f146a541335e60bf0870e63733d0ba422a8bd9b278eccec89956f19' },
-  { name: 'multi.xd', sha256: '75e178bc7984e6e429106bf74db6002fed0ed52ecc5e79c49ae1dfd68cfb8f38' },
 ];
 const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
