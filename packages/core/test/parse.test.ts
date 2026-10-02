@@ -265,6 +265,6 @@ describe('mask groups', () => {
     const m = g.children[0] as IrGroup;
     expect(m.clip?.maskName).toBe('M');
     expect(m.clip?.shapes).toHaveLength(1);
-    expect(m.clip?.shapes[0]!.name).toBe('maskRect');
+    expect(m.clip?.shapes[0]?.name).toBe('maskRect');
   });
 });
