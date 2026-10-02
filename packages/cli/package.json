@@ -3,6 +3,25 @@
   "version": "0.1.0",
   "description": "Extract SVG vectors from Adobe XD share links and .xd files, with inventory and validation.",
   "license": "MIT",
+  "author": "jeanpfs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jeanpfs/xd-extract.git"
+  },
+  "homepage": "https://github.com/jeanpfs/xd-extract#readme",
+  "bugs": {
+    "url": "https://github.com/jeanpfs/xd-extract/issues"
+  },
+  "keywords": [
+    "adobe-xd",
+    "xd",
+    "svg",
+    "vector",
+    "extract",
+    "design",
+    "cli",
+    "agent-skills"
+  ],
   "type": "module",
   "bin": {
     "xd": "dist/bin.js"
@@ -14,7 +33,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "tsup"
+    "build": "tsup",
+    "prepack": "node ../../scripts/copy-readme.mjs"
   },
   "dependencies": {
     "@resvg/resvg-js": "2.6.2"

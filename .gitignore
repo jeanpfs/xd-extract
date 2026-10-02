@@ -5,3 +5,4 @@ fixtures/.cache
 fixtures/private
 .leakcheck
 .DS_Store
+packages/cli/README.md
