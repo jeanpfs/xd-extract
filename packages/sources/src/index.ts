@@ -1,3 +1,4 @@
+export * from './browser';
 export * from './fixture';
 export * from './recording';
 export * from './share-link';
