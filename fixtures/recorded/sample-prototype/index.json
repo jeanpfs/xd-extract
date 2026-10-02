@@ -1,0 +1,14 @@
+{
+  "entries": [
+    {
+      "key": "https://xd.adobe.com/view/03b1317d-e479-43b9-7c5f-8e291ed15d40-7580/",
+      "status": 200,
+      "file": "1.txt"
+    },
+    {
+      "key": "{CDN}/content/storage/id/urn:aaid:sc:US:efbe7a7a-79aa-4a01-ae8c-ad6a1697ccd1?component_id=manifest&api_key=CometServer1&access_token=REDACTED",
+      "status": 200,
+      "file": "2.txt"
+    }
+  ]
+}
