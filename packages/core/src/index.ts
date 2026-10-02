@@ -11,5 +11,7 @@ export * from './manifest';
 export * from './matrix';
 export * from './parse';
 export * from './preview';
+export * from './raster';
 export * from './resolve';
+export * from './validate';
 export * from './warnings';
