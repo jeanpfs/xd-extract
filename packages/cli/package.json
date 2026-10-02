@@ -1,0 +1,26 @@
+{
+  "name": "xd-extract",
+  "version": "0.1.0",
+  "description": "Extract SVG vectors from Adobe XD share links and .xd files, with inventory and validation.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "xd": "dist/bin.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsup"
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "2.6.2"
+  },
+  "devDependencies": {
+    "@xmldom/xmldom": "0.9.12",
+    "fflate": "0.8.3"
+  }
+}
