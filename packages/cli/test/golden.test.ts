@@ -4,6 +4,7 @@ import {
   convertRoot,
   type ParsedArtboard,
   parseDocument,
+  validateRaster,
   validateStatic,
   XdError,
 } from '@xd-extract/core';
@@ -69,6 +70,17 @@ describe.each(loaded)('public fixture $name', ({ name, cases, golden }) => {
 
   it('emits statically valid SVG for every convertible root', () => {
     for (const c of cases) expect(validateStatic(c.svg), c.slug).toEqual([]);
+  });
+
+  it('renders every root that has no unsupported art as non-empty and without an empty edge band', () => {
+    // A root drawn outside its own viewBox looks like an empty or half-empty render. Roots where the
+    // converter already reported unsupported art (images, gradients) are expected to look incomplete.
+    const lost = /^unsupported-(fill|stroke|shape|node):/;
+    for (const c of cases.filter((x) => !x.warnings.some((w) => lost.test(w)))) {
+      const codes = validateRaster(c.svg).map((f) => f.code);
+      expect(codes, c.slug).not.toContain('render-empty');
+      expect(codes, c.slug).not.toContain('edge-band-drift');
+    }
   });
 
   it.each(golden)('matches the golden SVG for $slug', async ({ slug, svg }) => {

@@ -72,7 +72,9 @@ export function emitSvg(root: IrNode, frameResult: FrameResult): EmitResult {
   const shapeSvg = (n: IrShape, isRoot: boolean): string => {
     const { tag, attrs } = geomEl(n.geom, false);
     const out: Attrs = { ...attrs };
-    if (!isIdentity(n.transform)) out.transform = matrixAttr(n.transform);
+    // The frame is measured in the root's own coordinates (its transform is ignored), exactly as for a
+    // root group, so a root shape must not apply its transform here or it lands outside the viewBox.
+    if (!isRoot && !isIdentity(n.transform)) out.transform = matrixAttr(n.transform);
     out.fill = n.fill?.kind === 'solid' ? n.fill.css : 'none'; // stroke-only paths must not inherit SVG's black
     const s = n.stroke;
     if (s && s.paint.kind === 'solid') {

@@ -2,6 +2,7 @@ import { agcDoc, circle, group, rect, solid, withTransform } from '@xd-extract/t
 import { describe, expect, it } from 'vitest';
 import { convertRoot } from '../src/convert';
 import { parseAgc } from '../src/parse';
+import { validateRaster } from '../src/validate';
 
 const convert = (...roots: Parameters<typeof agcDoc>[0]) => {
   const parsed = parseAgc(agcDoc(roots));
@@ -148,5 +149,58 @@ describe('report', () => {
     expect(dirtyReport.warnings.map((w) => w.code)).toEqual(['unsupported-fill:gradient']);
     expect(cleanReport.artboard).toBe('A');
     expect(cleanReport.node).toBe('clean');
+  });
+});
+
+describe('a root that is a single shape', () => {
+  // Real designs export background plates that sit far from the artboard origin, so the shape
+  // node carries a large translate. The frame is measured in the shape's own coordinates, so
+  // emit must not apply that translate again or the shape lands outside the viewBox.
+  const plate = withTransform(rect('plate', 0, 0, 1920, 400, { fill: solid(239, 241, 242) }), {
+    tx: -2020,
+    ty: -124.5,
+  });
+
+  it('keeps the shape inside its viewBox, with no transform of its own', () => {
+    const { svg, report } = convert(plate);
+    expect(report.frame).toEqual({ x: 0, y: 0, w: 1920, h: 400 });
+    expect(svg).not.toContain('transform=');
+  });
+
+  it('renders fully painted: no empty render and no edge band that looks like mask drift', () => {
+    expect(validateRaster(convert(plate).svg)).toEqual([]);
+  });
+
+  it('does the same for a rounded root rect and a root path', () => {
+    const pill = withTransform(
+      rect(
+        'pill',
+        0,
+        0,
+        401,
+        573,
+        { fill: solid(249, 203, 23) },
+        {
+          shape: { type: 'rect', x: 0, y: 0, width: 401, height: 573, r: [200, 200, 200, 200] },
+        },
+      ),
+      { tx: 8078, ty: 285 },
+    );
+    expect(convert(pill).svg).not.toContain('transform=');
+    const path = {
+      type: 'shape',
+      name: 'p',
+      transform: { a: 1, b: 0, c: 0, d: 1, tx: 500, ty: -300 },
+      shape: { type: 'path', path: 'M 0 0 L 100 0 L 100 50 L 0 50 Z' },
+      style: { fill: solid(9, 9, 9) },
+    };
+    expect(convert(path).svg).not.toContain('transform=');
+    expect(validateRaster(convert(path).svg)).toEqual([]);
+  });
+
+  it('still applies a shape transform when the shape is nested', () => {
+    const nested = withTransform(rect('inner', 0, 0, 50, 50, { fill: solid(1, 2, 3) }), { tx: 10, ty: 20 });
+    const { svg } = convert(group('Root', [card(), nested]));
+    expect(svg).toContain('transform="matrix(1 0 0 1 10 20)"');
   });
 });

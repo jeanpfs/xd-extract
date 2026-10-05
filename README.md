@@ -10,8 +10,8 @@ XD share links draw into a `<canvas>`, so right-click and download give you noth
 
 ## Status: 0.1.0, early
 
-- **Verified:** `.xd` files (tested on one public sample) and the conversion, inventory and validation pipeline. **Masks** (`clipPath`, including the drift correction) are covered only by synthetic tests: no public sample contains one.
-- **Not yet verified against a real link:** a share link that carries a **vector** payload. The only public link we could find (an Adobe sample) is raster-only, so the vector download path is built from the `.xd` manifest format and covered by synthetic tests, not by a live vector link. If it fails on your link, `xd inventory <link> --record dir` captures the exchange (see [Privacy](#privacy)) and an issue with the error code helps a lot.
+- **Verified:** `.xd` files (one public sample), and a **real share link that carries vector data** (an XD 2.33 design with 6 artboards and 120 top-level nodes): the page, the manifest and every artboard were fetched on the first try, all 117 nodes with geometry converted, and the 26 exports that use masks (`clipPath`) validate. Only one such link has been tested.
+- **Not verified on real data:** the mask-drift correction (it never triggered; it has synthetic tests only), `/spec/` links, password-protected links, and AGC versions other than `1.5.0`. The only *public* link we could find (an Adobe sample) is raster-only. If a link fails, `xd inventory <link> --record dir` captures the exchange (see [Privacy](#privacy)) and an issue with the error code helps a lot.
 - **SVG only.** Gradients, shadows, blur, text, embedded images and inside-aligned strokes are **not converted**. Each is reported as a warning; nothing is dropped silently. See [What is converted](#what-is-converted).
 - Developed and tested on macOS; CI runs on Linux. Windows is untested.
 
