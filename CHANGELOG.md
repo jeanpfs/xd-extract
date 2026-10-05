@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-10-05)
 
 - `xd inventory`, `xd extract`, `xd validate`, `xd redact` (with `--exclude <node>` to drop top-level nodes before anonymising).
 - Sources: Adobe XD share link (pure HTTP, optional `--browser` fallback) and `.xd` files.
