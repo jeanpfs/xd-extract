@@ -260,3 +260,79 @@ describe('stroke alignment', () => {
     expect(svg).toMatch(/<clipPath[^>]*><path[^>]*clip-rule="evenodd"/);
   });
 });
+
+describe('drop shadows', () => {
+  const shadow = (dx: number, dy: number, r: number, alpha = 0.5) => ({
+    type: 'dropShadow',
+    global: true,
+    params: { dropShadows: [{ dx, dy, r, color: { mode: 'RGB', value: { r: 0, g: 0, b: 0 }, alpha } }] },
+  });
+  const boxed = (extra = {}) => rect('box', 10, 10, 40, 40, { fill: solid(255, 0, 0), ...extra });
+  const alphaAt = (svg: string, w: number, x: number, y: number) =>
+    rasterize(svg, w).alpha[y * w + x] as number;
+
+  it('emits one filter per shadowed node and grows a content frame to the visible shadow', () => {
+    const { svg, report } = convert(group('Root', [boxed({ filters: [shadow(0, 10, 4)] })]));
+    // the filled shape is its own plate, and a plate includes its own shadow
+    expect(report.rule).toBe('plate');
+    expect(report.frame).toEqual({ x: 6, y: 10, w: 48, h: 54 });
+    expect(svg).toMatch(/<filter id="shadow-1" filterUnits="userSpaceOnUse"[^>]*>/);
+    expect(svg).toContain('<feGaussianBlur in="SourceAlpha" stdDeviation="2"');
+    expect(svg).toContain('<feOffset dx="0" dy="10"');
+    expect(svg).toMatch(/<feFlood flood-color="rgb\(0,0,0\)" flood-opacity="0.5"/);
+    expect(svg).toMatch(/<g filter="url\(#shadow-1\)"><rect[^>]*fill="rgb\(255,0,0\)"/);
+    // the filter region is never smaller than the visible shadow, or it would be cut
+    const f = svg.match(/<filter [^>]*x="(-?[\d.]+)" y="(-?[\d.]+)" width="([\d.]+)" height="([\d.]+)"/)!;
+    const [x, y, w, h] = f.slice(1).map(Number) as [number, number, number, number];
+    expect(x).toBeLessThanOrEqual(6);
+    expect(y + h).toBeGreaterThanOrEqual(64);
+    expect(x + w).toBeGreaterThanOrEqual(54);
+  });
+
+  it('paints the shadow under the shape and not beyond the offset', () => {
+    // r = 0: no blur, so the shadow is a plain translated copy at 50 % alpha
+    const { svg, report } = convert(group('Root', [boxed({ filters: [shadow(0, 10, 0)] })]));
+    expect(report.frame).toEqual({ x: 10, y: 10, w: 40, h: 50 });
+    expect(svg).not.toContain('feGaussianBlur');
+    expect(alphaAt(svg, 40, 20, 20)).toBe(255); // shape
+    const below = alphaAt(svg, 40, 20, 45); // y = 55: shadow only
+    expect(below).toBeGreaterThan(110);
+    expect(below).toBeLessThan(145);
+  });
+
+  it('grows a content frame to the visible shadow too', () => {
+    const inherited = group('Root', [rect('box', 10, 10, 40, 40, { filters: [shadow(0, 10, 4)] })], {
+      style: { fill: solid(255, 0, 0) },
+    });
+    const { report } = convert(inherited);
+    expect(report.rule).toBe('content');
+    expect(report.frame).toEqual({ x: 6, y: 10, w: 48, h: 54 });
+  });
+
+  it('keeps a plate frame: a shadow of another shape does not widen the background', () => {
+    const small = rect('small', 70, 70, 20, 20, { fill: solid(0, 0, 255), filters: [shadow(0, 20, 4)] });
+    const { report } = convert(group('Root', [card(), small]));
+    expect(report.rule).toBe('plate');
+    expect(report.frame).toEqual({ x: 0, y: 0, w: 100, h: 100 });
+  });
+
+  it('puts the filter outside the mask clip, so the group shadow follows the clipped art', () => {
+    const masked = group('Masked', [rect('a', 0, 0, 30, 30, { fill: solid(1, 2, 3) })], {
+      meta: {
+        ux: {
+          isMaskGroup: true,
+          clipPathResources: { children: [rect('m', 0, 0, 20, 20)] },
+        },
+      },
+      style: { filters: [shadow(2, 2, 2)] },
+    });
+    const { svg } = convert(group('Root', [card(), masked]));
+    expect(svg).toMatch(/<g filter="url\(#shadow-1\)"><g clip-path="url\(#clip-1\)">/);
+  });
+
+  it('applies transform and opacity once, on the same wrapper as the filter', () => {
+    const node = withTransform(boxed({ filters: [shadow(1, 1, 1)], opacity: 0.5 }), { tx: 3, ty: 4 });
+    const { svg } = convert(group('Root', [card(), node]));
+    expect(svg).toMatch(/<g transform="matrix\(1 0 0 1 3 4\)" opacity="0.5" filter="url\(#shadow-1\)"><rect/);
+  });
+});

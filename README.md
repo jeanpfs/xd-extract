@@ -12,7 +12,7 @@ XD share links draw into a `<canvas>`, so right-click and download give you noth
 
 - **Verified:** `.xd` files (one public sample), and a **real share link that carries vector data** (an XD 2.33 design with 6 artboards and 120 top-level nodes): the page, the manifest and every artboard were fetched on the first try, all 117 nodes with geometry converted, and the 26 exports that use masks (`clipPath`) validate. Only one such link has been tested.
 - **Not verified on real data:** the mask-drift correction (it never triggered; it has synthetic tests only), `/spec/` links, password-protected links, and AGC versions other than `1.5.0`. The only *public* link we could find (an Adobe sample) is raster-only. If a link fails, `xd inventory <link> --record dir` captures the exchange (see [Privacy](#privacy)) and an issue with the error code helps a lot.
-- **SVG only.** Gradients, shadows, blur, text and embedded images are **not converted**. Each is reported as a warning; nothing is dropped silently. See [What is converted](#what-is-converted).
+- **SVG only.** Gradients, blur, text and embedded images are **not converted**. Each is reported as a warning; nothing is dropped silently. See [What is converted](#what-is-converted).
 - Developed and tested on macOS; CI runs on Linux. Windows is untested.
 
 ## Quick start
@@ -65,8 +65,8 @@ For a share link, pass the URL instead of the file: `xd inventory https://xd.ado
 
 | Converted | Reported as a warning, not converted |
 |---|---|
-| Groups and nested transforms, rectangles (with corner radii), paths (including even-odd), compound shapes, lines, circles, ellipses | Gradient and image (pattern) fills, shadows and blur, text |
-| Solid fills and strokes with alpha, caps, joins, miter limits, dashes; inside and outside stroke alignment on closed shapes | Alignment on lines and open paths (drawn centred) |
+| Groups and nested transforms, rectangles (with corner radii), paths (including even-odd), compound shapes, lines, circles, ellipses | Gradient and image (pattern) fills, blur, inner shadows, text |
+| Solid fills and strokes with alpha, caps, joins, miter limits, dashes; inside and outside stroke alignment on closed shapes; drop shadows (`global`) on shapes and groups, as an SVG filter | Alignment on lines and open paths (drawn centred) |
 | Masks as `clipPath`, including masks nudged off the art by a few pixels | `style.clipPath` (repeat-grid masks) |
 | The frame (`viewBox`): the background plate when there is one, else the tight content box | |
 

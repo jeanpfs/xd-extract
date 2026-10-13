@@ -132,6 +132,59 @@ describe('unsupported content is reported, never silent', () => {
     expect(codes).toEqual(['unsupported-style:clipPath', 'unsupported-style:filters']);
   });
 
+  describe('shadows', () => {
+    const drop = (over = {}) => ({
+      type: 'dropShadow',
+      global: true,
+      params: {
+        dropShadows: [
+          { dx: 1, dy: 3, r: 3, color: { mode: 'RGB', value: { r: 0, g: 0, b: 0 }, alpha: 0.25 } },
+        ],
+      },
+      ...over,
+    });
+
+    it('reads a global drop shadow into the IR without a warning', () => {
+      const { node, warnings } = only(
+        parseAgc(agcDoc([rect('r', 0, 0, 5, 5, { fill: solid(1, 1, 1), filters: [drop()] })])),
+      );
+      expect(warnings).toEqual([]);
+      expect((node as IrShape).shadows).toEqual([{ dx: 1, dy: 3, r: 3, color: 'rgb(0,0,0)', opacity: 0.25 }]);
+    });
+
+    it('reads shadows on groups and keeps several in order', () => {
+      const two = drop({
+        params: {
+          dropShadows: [
+            { dx: 0, dy: 1, r: 2, color: { mode: 'RGB', value: { r: 1, g: 2, b: 3 } } },
+            { dx: 4, dy: 5, r: 6, color: { mode: 'RGB', value: { r: 9, g: 9, b: 9 }, alpha: 0.5 } },
+          ],
+        },
+      });
+      const g = group('G', [rect('r', 0, 0, 5, 5, { fill: solid(1, 1, 1) })], { style: { filters: [two] } });
+      const { node, warnings } = only(parseAgc(agcDoc([g])));
+      expect(warnings).toEqual([]);
+      expect((node as IrGroup).shadows.map((x) => [x.dx, x.opacity])).toEqual([
+        [0, 1],
+        [4, 0.5],
+      ]);
+    });
+
+    it('reports what it cannot convert, with the filter type in the code', () => {
+      const codesFor = (filters: unknown[]) =>
+        only(parseAgc(agcDoc([rect('r', 0, 0, 5, 5, { fill: solid(1, 1, 1), filters })]))).warnings.map(
+          (w) => w.code,
+        );
+      expect(codesFor([{ type: 'innerShadow' }])).toEqual(['unsupported-style:filters:innerShadow']);
+      expect(codesFor([drop({ global: false })])).toEqual(['unsupported-style:filters:dropShadow-local']);
+      expect(codesFor([{ type: 'dropShadow' }])).toEqual(['unsupported-style:filters']);
+      const cmyk = drop({
+        params: { dropShadows: [{ dx: 0, dy: 0, r: 1, color: { mode: 'CMYK', value: {} } }] },
+      });
+      expect(codesFor([cmyk])).toEqual(['unsupported-style:filters']);
+    });
+  });
+
   describe('stroke alignment', () => {
     const black = solid(0, 0, 0).color;
     const stroked = (align: string, shape = rect('r', 0, 0, 10, 10)) => {

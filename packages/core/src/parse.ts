@@ -1,7 +1,7 @@
 import type { AgcDocument, AgcNode, AgcPaint, AgcShape, AgcStyle, AgcTransform } from './agc';
-import { solidCss } from './color';
+import { type AgcColor, solidCss } from './color';
 import { XdError } from './errors';
-import type { Geom, IrClipShape, IrGroup, IrNode, IrShape, Paint, Point, Stroke } from './ir';
+import type { Geom, IrClipShape, IrGroup, IrNode, IrShape, Paint, Point, Shadow, Stroke } from './ir';
 import { IDENTITY, type Matrix, round } from './matrix';
 import { type Warning, WarningCollector } from './warnings';
 
@@ -50,11 +50,55 @@ function readPaint(
   return { kind: 'unsupported', reason };
 }
 
-function noteStyle(st: AgcStyle, name: string, w: WarningCollector): void {
+const FILTERS_MSG = 'a style.filters entry could not be converted';
+
+/** Drop shadows become IR; every other filter, and any shadow we cannot read exactly, is reported. */
+function readShadows(st: AgcStyle, name: string, w: WarningCollector): Shadow[] {
   const filters = st.filters;
-  if (filters && (!Array.isArray(filters) || filters.length > 0)) {
-    w.add('unsupported-style:filters', 'shadows and blur (style.filters) are not converted yet', name);
+  if (!filters || (Array.isArray(filters) && filters.length === 0)) return [];
+  if (!Array.isArray(filters)) {
+    w.add('unsupported-style:filters', FILTERS_MSG, name);
+    return [];
   }
+  const out: Shadow[] = [];
+  for (const f of filters as Record<string, unknown>[]) {
+    const type = typeof f?.type === 'string' ? f.type : undefined;
+    if (type !== undefined && type !== 'dropShadow') {
+      w.add(`unsupported-style:filters:${type}`, `filter "${type}" is not converted`, name);
+      continue;
+    }
+    const list = (f?.params as { dropShadows?: unknown } | undefined)?.dropShadows;
+    const parsed = Array.isArray(list) ? list.map(readShadow) : [];
+    if (!parsed.length || parsed.some((s) => !s)) {
+      w.add('unsupported-style:filters', FILTERS_MSG, name);
+      continue;
+    }
+    // Only `global: true` has been observed (the shadow of the rendered node as a whole).
+    if (f.global !== true) {
+      w.add(
+        'unsupported-style:filters:dropShadow-local',
+        'drop shadow without global: true is not converted',
+        name,
+      );
+      continue;
+    }
+    out.push(...(parsed as Shadow[]));
+  }
+  return out;
+}
+
+function readShadow(raw: unknown): Shadow | null {
+  const s = raw as { dx?: unknown; dy?: unknown; r?: unknown; color?: AgcColor } | null;
+  const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+  if (!s || !isNum(s.dx) || !isNum(s.dy) || !isNum(s.r) || s.r < 0) return null;
+  const c = s.color;
+  if (!c || (c.mode && c.mode !== 'RGB')) return null;
+  const a = c.alpha;
+  if (a !== undefined && a !== null && !isNum(a)) return null;
+  return { dx: s.dx, dy: s.dy, r: s.r, color: solidCss({ ...c, alpha: undefined }), opacity: a ?? 1 };
+}
+
+function noteStyle(st: AgcStyle, name: string, w: WarningCollector): void {
   if (st.clipPath)
     w.add('unsupported-style:clipPath', 'style.clipPath (repeat-grid mask) is not converted', name);
 }
@@ -196,6 +240,7 @@ function parseShape(n: AgcNode, inh: Inherited, w: WarningCollector): IrShape | 
   if (!geom) return null;
   const st = n.style ?? {};
   noteStyle(st, name, w);
+  const shadows = readShadows(st, name, w);
   const declaredFill = readPaint(st.fill, 'fill', w, name);
   const declaredStroke = readPaint(st.stroke, 'stroke', w, name);
   const ownFill = declaredFill != null;
@@ -228,6 +273,7 @@ function parseShape(n: AgcNode, inh: Inherited, w: WarningCollector): IrShape | 
     ownFill,
     stroke,
     opacity: st.opacity ?? 1,
+    shadows,
   };
 }
 
@@ -235,6 +281,7 @@ function parseGroup(n: AgcNode, inh: Inherited, w: WarningCollector): IrGroup {
   const name = n.name ?? '';
   const st = n.style ?? {};
   noteStyle(st, name, w);
+  const shadows = readShadows(st, name, w);
   const f = readPaint(st.fill, 'fill', w, name);
   const s = readPaint(st.stroke, 'stroke', w, name);
   // A group stroke is only inherited as paint and width; its alignment is not.
@@ -270,6 +317,7 @@ function parseGroup(n: AgcNode, inh: Inherited, w: WarningCollector): IrGroup {
     name,
     transform: transformOf(n.transform),
     opacity: st.opacity ?? 1,
+    shadows,
     clip,
     children,
   };

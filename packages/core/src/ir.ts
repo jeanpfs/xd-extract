@@ -4,6 +4,16 @@ export type Point = [number, number];
 
 export type Paint = { kind: 'solid'; css: string } | { kind: 'unsupported'; reason: string };
 
+/** A drop shadow, in the coordinates of the node it belongs to. `color` is `rgb(r,g,b)`; alpha is `opacity`. */
+export interface Shadow {
+  dx: number;
+  dy: number;
+  /** Blur radius as XD stores it; the SVG standard deviation is half of it. */
+  r: number;
+  color: string;
+  opacity: number;
+}
+
 export interface Stroke {
   paint: Paint;
   /** undefined: emit no stroke-width (SVG default 1). */
@@ -35,6 +45,7 @@ export interface IrShape {
   ownFill: boolean;
   stroke: Stroke | null;
   opacity: number;
+  shadows: Shadow[];
 }
 
 export interface IrClipShape {
@@ -49,6 +60,7 @@ export interface IrGroup {
   name: string;
   transform: Matrix;
   opacity: number;
+  shadows: Shadow[];
   clip: { maskName: string; shapes: IrClipShape[] } | null;
   children: IrNode[];
 }

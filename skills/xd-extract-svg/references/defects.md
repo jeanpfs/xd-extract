@@ -11,7 +11,7 @@ What you see, what causes it, and which validator finding catches it (if any).
 | Art visible but strokes missing | Line colour in `fill` not mapped to `stroke` | `line-without-stroke` |
 | Uniformly clipped edges | Frame from a bounding box without stroke half-width, or an outer loose mask used as frame | `tight-frame` (warn, content-box frames only) |
 | Part of the art missing, flat or hollow areas | Gradient or image fill not converted | `extraction:unsupported-fill:*` |
-| Shadows, blur or text absent | Not implemented | `extraction:unsupported-style:filters`, `extraction:skipped-text` |
+| Blur, inner shadows or text absent | Not implemented (drop shadows are converted) | `extraction:unsupported-style:filters`, `extraction:skipped-text` |
 | Set of icons with different sizes | The frame rule misfired on one of them | `frame-mismatch` (with `--expect-same-frame`) |
 | File does not open | Malformed XML, `NaN` in numbers, `<g>` inside a `clipPath` | `xml-invalid`, `render-failed`, `nan-number`, `group-in-clippath` |
 

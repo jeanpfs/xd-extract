@@ -1,6 +1,7 @@
-import { boxOf, type FrameResult } from './frame';
+import { boxOf, collectPaintFacts, type FrameResult } from './frame';
 import type { Geom, IrGroup, IrNode, IrShape, Stroke } from './ir';
 import { IDENTITY, isIdentity, type Matrix, matrixAttr, mul, round, translate } from './matrix';
+import { shadowBox } from './shadow';
 
 export interface Snap {
   clip: string;
@@ -79,6 +80,7 @@ export function emitSvg(root: IrNode, frameResult: FrameResult): EmitResult {
   const snaps: Snap[] = [];
   let clipSeq = 0;
   let alignSeq = 0;
+  let shadowSeq = 0;
 
   const shapeSvg = (n: IrShape, isRoot: boolean): string => {
     const { tag, attrs } = geomEl(n.geom, false);
@@ -89,11 +91,18 @@ export function emitSvg(root: IrNode, frameResult: FrameResult): EmitResult {
     // root group, so a root shape must not apply its transform here or it lands outside the viewBox.
     const transform = !isRoot && !isIdentity(n.transform) ? matrixAttr(n.transform) : undefined;
     const opacity = !isRoot && n.opacity !== 1 ? round(n.opacity) : undefined;
+    const filter = shadowRef(n);
     const out: Attrs = { ...attrs };
-    if (!aligned) out.transform = transform;
+    // With a shadow or an aligned stroke the shape is wrapped, and the wrapper carries transform,
+    // opacity and filter once; otherwise they stay on the element.
+    const wrapped = !!filter || !!aligned;
+    if (!wrapped) out.transform = transform;
     out.fill = n.fill?.kind === 'solid' ? n.fill.css : 'none'; // stroke-only paths must not inherit SVG's black
     if (solidStroke && !aligned) strokeAttrs(out, solidStroke, 1);
-    if (!aligned) return el(tag, { ...out, opacity });
+    if (!aligned) {
+      if (!filter) return el(tag, { ...out, opacity });
+      return el('g', { transform, opacity, filter }, el(tag, out));
+    }
 
     // Inside/outside: draw the stroke twice as wide and keep only the wanted half. The fill element
     // and the stroke element share one wrapper, so transform and opacity apply once.
@@ -125,7 +134,48 @@ export function emitSvg(root: IrNode, frameResult: FrameResult): EmitResult {
       sa.mask = `url(#${id})`;
     }
     const pair = el(tag, out) + el(tag, sa);
-    return transform || opacity ? el('g', { transform, opacity }, pair) : pair;
+    return transform || opacity || filter ? el('g', { transform, opacity, filter }, pair) : pair;
+  };
+
+  /** Registers the shadow filter of a node and returns its `url(#id)`, or undefined when nothing paints. */
+  const shadowRef = (n: IrNode): string | undefined => {
+    if (!n.shadows.length) return undefined;
+    const local = collectPaintFacts(n, false).content;
+    if (!local) return undefined;
+    const r = shadowBox(local, n.shadows, 1.5);
+    const region = {
+      x: round(r.x0 - 1),
+      y: round(r.y0 - 1),
+      width: round(r.x1 - r.x0 + 2),
+      height: round(r.y1 - r.y0 + 2),
+    };
+    const id = `shadow-${++shadowSeq}`;
+    const fx: string[] = [];
+    const merge: string[] = [];
+    n.shadows.forEach((s, i) => {
+      const k = i + 1;
+      let src = 'SourceAlpha';
+      if (s.r > 0) {
+        fx.push(el('feGaussianBlur', { in: src, stdDeviation: round(s.r / 2), result: `blur${k}` }));
+        src = `blur${k}`;
+      }
+      fx.push(el('feOffset', { dx: round(s.dx), dy: round(s.dy), in: src, result: `off${k}` }));
+      fx.push(
+        el('feFlood', { 'flood-color': s.color, 'flood-opacity': round(s.opacity), result: `flood${k}` }),
+      );
+      fx.push(el('feComposite', { in: `flood${k}`, in2: `off${k}`, operator: 'in', result: `shadow${k}` }));
+      merge.push(el('feMergeNode', { in: `shadow${k}` }));
+    });
+    merge.push(el('feMergeNode', { in: 'SourceGraphic' }));
+    fx.push(el('feMerge', {}, merge.join('')));
+    defs.push(
+      el(
+        'filter',
+        { id, filterUnits: 'userSpaceOnUse', ...region, 'color-interpolation-filters': 'sRGB' },
+        fx.join(''),
+      ),
+    );
+    return `url(#${id})`;
   };
 
   const clipDef = (n: IrGroup, world2: Matrix): string => {
@@ -163,9 +213,16 @@ export function emitSvg(root: IrNode, frameResult: FrameResult): EmitResult {
     if (!isIdentity(m)) attrs.transform = matrixAttr(m);
     // Opacity 0 on the exported root is a carousel toggle: ignore it there, drop it inside (parse does).
     if (!isRoot && n.opacity !== 1) attrs.opacity = round(n.opacity);
-    if (n.clip) attrs['clip-path'] = `url(#${clipDef(n, world2)})`;
-    const kids = n.children.map((c) => walk(c, world2, false)).join('');
+    const filter = shadowRef(n);
+    if (filter) attrs.filter = filter;
+    let kids = n.children.map((c) => walk(c, world2, false)).join('');
     if (!kids) return '';
+    if (n.clip) {
+      // filter runs before clip-path on one element, which would clip the shadow; nest the clip instead
+      const clipRef = `url(#${clipDef(n, world2)})`;
+      if (filter) kids = el('g', { 'clip-path': clipRef }, kids);
+      else attrs['clip-path'] = clipRef;
+    }
     return Object.keys(attrs).length ? el('g', attrs, kids) : kids;
   };
 

@@ -35,7 +35,9 @@ Every extraction records warnings in the report (`<file>.svg.report.json`) and p
 | `unsupported-shape:<type>` | yes | Shape type not converted |
 | `unsupported-node:<type>` | yes | Node type not converted |
 | `skipped-text` | no | Text nodes are skipped |
-| `unsupported-style:filters` | no | Shadows and blur are not converted |
+| `unsupported-style:filters:<type>` | no | A filter other than a drop shadow (`innerShadow`, blur, ...) is not converted |
+| `unsupported-style:filters:dropShadow-local` | no | A drop shadow without `global: true` (never observed) is not converted |
+| `unsupported-style:filters` | no | A `style.filters` entry was malformed or used a colour mode other than RGB |
 | `unsupported-style:clipPath` | no | Repeat-grid mask is not converted |
 | `stroke-align-ignored:<align>` | no | Alignment other than centre on a line, an open path or an unknown value: drawn centred. Inside and outside on closed shapes are converted |
 | `path-bbox-approximate` | no | Path uses commands other than absolute M/L/C/Z; the frame is approximate |
@@ -89,4 +91,4 @@ Warnings: `edge-band-drift` (one edge band empty, the opposite painted: possible
 - **`TokenExpired`:** tokens in share-link manifests are short-lived. Re-run; do not cache recordings.
 - **Empty or half-empty SVG:** run `xd validate`; `render-empty` or `edge-band-drift` points at the frame. Open an issue with the redacted document.
 - **Text missing:** text is not converted yet (`skipped-text`).
-- **Output differs in gradients, shadows, images:** not converted yet; see the warnings in the report.
+- **Output differs in gradients, blur, images:** not converted yet; see the warnings in the report.

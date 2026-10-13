@@ -27,7 +27,7 @@ Exit code `0`: no errors (warnings may remain). Exit code `1`: at least one `err
 | `extraction:unsupported-fill:*` (also `-stroke`, `-shape`, `-node`) | error | Art is missing from the SVG |
 | `edge-band-drift` | warn | One edge band is empty while the opposite is painted: possible mask drift or off-centre frame |
 | `tight-frame` | warn | A content-box frame touches all four edges: strokes may be clipped |
-| `extraction:<other>` | warn | Text skipped, shadows or blur not converted, stroke alignment on a line or open path rendered centred |
+| `extraction:<other>` | warn | Text skipped, blur or inner shadows not converted, stroke alignment on a line or open path rendered centred |
 
 `warn` findings are suspicions: they can be legitimate art. Look before acting.
 
