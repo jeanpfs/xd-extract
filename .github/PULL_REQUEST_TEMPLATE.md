@@ -1,0 +1,5 @@
+- [ ] Failing test first (synthetic fixture in `test-support/`)
+- [ ] `pnpm lint && pnpm typecheck && pnpm leakcheck && pnpm skills:check && pnpm test`
+- [ ] Unsupported content becomes a warning, nothing dropped silently
+- [ ] No private design, share link, screenshot or id in the diff
+- [ ] CHANGELOG updated if user-visible

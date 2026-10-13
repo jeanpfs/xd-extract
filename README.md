@@ -76,6 +76,8 @@ Warnings that mean **art is missing** (`unsupported-fill:*`, `unsupported-stroke
 
 Only AGC `1.x` has been seen (files from 2017-2019). Newer versions produce an `agc-version-untested` warning.
 
+Full lists of errors, warnings, validation findings and file formats: [docs/reference.md](https://github.com/jeanpfs/xd-extract/blob/main/docs/reference.md).
+
 ## Share links
 
 The page's static HTML contains the URL of the design manifest, so a link needs **no browser**. If a link does not expose it (private, password protected, or a layout this tool has not seen), retry with `--browser`, which uses [agent-browser](https://github.com/vercel-labs/agent-browser) to find the manifest and then downloads it the same way.

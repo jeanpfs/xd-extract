@@ -49,6 +49,10 @@ describe('usage', () => {
     expect(help.code).toBe(0);
     expect(help.out).toContain('xd inventory');
     expect((await xdc()).code).toBe(EXIT_CODES.Usage);
+    const v = await xdc('--version');
+    expect(v.code).toBe(0);
+    expect(v.out.trim()).toMatch(/^\d+\.\d+\.\d+/);
+    expect((await xdc('-v')).out).toBe(v.out);
     expect((await xdc('bogus')).code).toBe(EXIT_CODES.Usage);
     expect((await xdc('inventory')).code).toBe(EXIT_CODES.Usage);
     expect((await xdc('inventory', xd, '--bogus')).code).toBe(EXIT_CODES.Usage);

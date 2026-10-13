@@ -1,4 +1,5 @@
 import { EXIT_CODES, EXIT_UNEXPECTED, XdError } from '@xd-extract/core';
+import pkg from '../package.json' with { type: 'json' };
 import { extractCommand } from './commands/extract';
 import { inventoryCommand } from './commands/inventory';
 import { redactCommand } from './commands/redact';
@@ -13,6 +14,7 @@ Usage:
   xd extract   <source> --map <map.json> [-d <dir>]
   xd validate  <file.svg...> [--expect-same-frame] [--json]
   xd redact    <source> -o <dir> [--exclude <top-level node name>]...
+  xd --version
 
 <source> is an https://xd.adobe.com/view/... share link, a .xd file, or a document.json from "xd redact".
 Share-link flags: --browser (find the manifest with agent-browser), --record <dir> (save HTTP responses with tokens
@@ -35,6 +37,10 @@ export async function run(argv: string[], io: Io): Promise<number> {
       case '--help':
       case 'help':
         io.out(USAGE);
+        return 0;
+      case '-v':
+      case '--version':
+        io.out(`${pkg.version}\n`);
         return 0;
       case undefined:
         io.err(USAGE);

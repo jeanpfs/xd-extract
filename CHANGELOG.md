@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- `xd --version` / `-v`.
+- Release workflow: a `v*` tag publishes to npm with provenance and creates the GitHub release from this file.
+- Docs: `docs/reference.md` (errors, warnings, validation findings, file formats, troubleshooting), `CONTRIBUTING.md`, `SECURITY.md`, issue and PR templates.
+
 ## 0.1.1 (2026-10-05)
 
 - Fix: a top-level node that is a single shape (rect, path, ellipse...) was drawn outside its own `viewBox` whenever the shape carried a translate, which gave an empty or half-empty SVG. The frame is measured in the root's own coordinates, so the root's transform is now ignored for shapes too, as it already was for groups. Found on a real share link (6 of 13 single-shape roots); `xd validate` reported it as `render-empty` or `edge-band-drift`.
