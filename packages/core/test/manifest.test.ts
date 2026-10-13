@@ -1,6 +1,6 @@
 import { buildManifest } from '@xd-extract/testkit';
 import { describe, expect, it } from 'vitest';
-import { parseManifest } from '../src/manifest';
+import { parseManifest, parseResources } from '../src/manifest';
 
 describe('parseManifest', () => {
   const manifest = buildManifest([
@@ -49,5 +49,23 @@ describe('parseManifest', () => {
   it('returns [] when the manifest has no artwork directory', () => {
     expect(parseManifest({ children: [] })).toEqual([]);
     expect(parseManifest(null)).toEqual([]);
+  });
+});
+
+describe('parseResources', () => {
+  it('finds the document-wide resources AGC, with its version', () => {
+    const m = buildManifest([{ id: 'a', name: 'A' }], {}, { resources: { version: '4' } });
+    expect(parseResources(m)).toEqual({ componentId: 'cmp-resources', version: '4' });
+    expect(parseResources(buildManifest([{ id: 'a', name: 'A' }], {}, { resources: {} }))).toEqual({
+      componentId: 'cmp-resources',
+    });
+  });
+
+  it('is null when the manifest has none, and does not take it for an artboard', () => {
+    const m = buildManifest([{ id: 'a', name: 'A' }]);
+    expect(parseResources(m)).toBeNull();
+    expect(parseResources(null)).toBeNull();
+    const withRes = buildManifest([{ id: 'a', name: 'A' }], {}, { resources: {} });
+    expect(parseManifest(withRes).map((a) => a.id)).toEqual(['pasteboard', 'a']);
   });
 });

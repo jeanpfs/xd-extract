@@ -47,7 +47,7 @@ Ask for both in **one round**:
 
 ## Warnings
 
-`unsupported-fill:gradient|pattern`, `unsupported-stroke:*`, `unsupported-shape:*`, `unsupported-node:*` mean art is **missing** from the SVG and validation fails on them. Report it to the user; do not hand-draw the missing part. `skipped-text`, `unsupported-style:filters` (shadows, blur), `unsupported-style:clipPath` and `stroke-align-ignored:*` are visible differences from the design; list them in the report.
+`unsupported-fill:gradient|pattern`, `unsupported-stroke:*`, `unsupported-shape:*`, `unsupported-node:*` (including a symbol instance whose master was not found) mean art is **missing** from the SVG and validation fails on them. Report it to the user; do not hand-draw the missing part. `skipped-text`, `unsupported-style:filters` (shadows, blur), `unsupported-style:clipPath` and `stroke-align-ignored:*` are visible differences from the design; list them in the report.
 
 ## References
 

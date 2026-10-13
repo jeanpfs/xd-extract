@@ -83,6 +83,12 @@ describe('validateRaster', () => {
     expect(f[0]!.message).toContain('bottom');
   });
 
+  it('does not take a shape that points at the edge for mask drift', () => {
+    // a triangle: the top band holds only the apex, the bottom band is the whole base
+    const tri = '<path d="M 50 0 L 100 100 L 0 100 Z" fill="#000"/>';
+    expect(codes(validateRaster(svg(tri)))).toEqual([]);
+  });
+
   it('does not judge frame edges when text is present, since text is not rasterized', () => {
     const half = '<rect x="0" y="0" width="100" height="70" fill="#000"/>';
     const withText = `${half}<text x="10" y="90"><tspan fill="#000">hello</tspan></text>`;

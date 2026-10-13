@@ -17,6 +17,49 @@ const happyRoutes = () => ({
   [componentUrl('cmp-pasteboard', '1')]: { body: emptyAgc },
 });
 
+describe('resources component', () => {
+  const resourcesAgc = { version: '1.5.0', children: [], resources: { meta: { ux: { symbols: [] } } } };
+  const withResources = (extra: Record<string, { status?: number; body: unknown }> = {}) => ({
+    ...happyRoutes(),
+    [manifestUrl]: {
+      body: buildManifest([{ id: 'a1', name: 'Splash', version: '1' }], {}, { resources: { version: '1' } }),
+    },
+    [componentUrl('cmp-resources', '1')]: { body: resourcesAgc },
+    ...extra,
+  });
+
+  it('is fetched with the same revision rules and returned on the document', async () => {
+    const doc = await loadShareLink(pageUrl, { fetch: fakeFetch(withResources()) });
+    expect(doc.resources).toEqual(resourcesAgc);
+  });
+
+  it('is not required: a link that loaded without it still loads', async () => {
+    const routes = withResources();
+    delete (routes as Record<string, unknown>)[componentUrl('cmp-resources', '1')];
+    const doc = await loadShareLink(pageUrl, { fetch: fakeFetch(routes) });
+    expect(doc.resources).toBeUndefined();
+    expect(doc.artboards).toHaveLength(2);
+  });
+
+  it('maps a refused token to TokenExpired, and unreadable JSON to InvalidAgc', async () => {
+    const refused = withResources({ [componentUrl('cmp-resources', '1')]: { status: 403, body: '' } });
+    await expect(loadShareLink(pageUrl, { fetch: fakeFetch(refused) })).rejects.toMatchObject({
+      code: 'TokenExpired',
+    });
+    const bad = withResources({ [componentUrl('cmp-resources', '1')]: { body: '{oops' } });
+    await expect(loadShareLink(pageUrl, { fetch: fakeFetch(bad) })).rejects.toMatchObject({
+      code: 'InvalidAgc',
+    });
+  });
+
+  it('is absent when the manifest does not list it, with no extra request', async () => {
+    const calls: string[] = [];
+    const doc = await loadShareLink(pageUrl, { fetch: fakeFetch(happyRoutes(), calls) });
+    expect(doc.resources).toBeUndefined();
+    expect(calls.some((c) => c.includes('cmp-resources'))).toBe(false);
+  });
+});
+
 describe('extractManifestUrl', () => {
   it('finds the manifest URL and unescapes &amp;', () => {
     expect(extractManifestUrl(pageHtml())).toBe(manifestUrl);

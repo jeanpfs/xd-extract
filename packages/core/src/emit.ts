@@ -105,13 +105,14 @@ export function emitSvg(root: IrNode, frameResult: FrameResult): EmitResult {
     const out: Attrs = { ...attrs };
     // With a shadow or an aligned stroke the shape is wrapped, and the wrapper carries transform,
     // opacity and filter once; otherwise they stay on the element.
+    const style = n.blend ? `mix-blend-mode:${n.blend}` : undefined;
     const wrapped = !!filter || !!aligned;
     if (!wrapped) out.transform = transform;
     out.fill = n.fill?.kind === 'solid' ? n.fill.css : 'none'; // stroke-only paths must not inherit SVG's black
     if (solidStroke && !aligned) strokeAttrs(out, solidStroke, 1);
     if (!aligned) {
-      if (!filter) return el(tag, { ...out, opacity });
-      return el('g', { transform, opacity, filter }, el(tag, out));
+      if (!filter) return el(tag, { ...out, opacity, style });
+      return el('g', { transform, opacity, filter, style }, el(tag, out));
     }
 
     // Inside/outside: draw the stroke twice as wide and keep only the wanted half. The fill element
@@ -144,7 +145,9 @@ export function emitSvg(root: IrNode, frameResult: FrameResult): EmitResult {
       sa.mask = `url(#${id})`;
     }
     const pair = el(tag, out) + el(tag, sa);
-    return transform || opacity || filter ? el('g', { transform, opacity, filter }, pair) : pair;
+    return transform || opacity || filter || style
+      ? el('g', { transform, opacity, filter, style }, pair)
+      : pair;
   };
 
   /** Registers the shadow filter of a node and returns its `url(#id)`, or undefined when nothing paints. */
@@ -223,6 +226,7 @@ export function emitSvg(root: IrNode, frameResult: FrameResult): EmitResult {
     attrs['xml:space'] = 'preserve';
     const filter = shadowRef(n);
     if (filter) attrs.filter = filter;
+    if (n.blend) attrs.style = `mix-blend-mode:${n.blend}`;
     const body = n.lines
       .map((line) =>
         line.runs
@@ -263,6 +267,7 @@ export function emitSvg(root: IrNode, frameResult: FrameResult): EmitResult {
     if (!isRoot && n.opacity !== 1) attrs.opacity = round(n.opacity);
     const filter = shadowRef(n);
     if (filter) attrs.filter = filter;
+    if (n.blend) attrs.style = `mix-blend-mode:${n.blend}`;
     let kids = n.children.map((c) => walk(c, world2, false)).join('');
     if (!kids) return '';
     if (n.clip) {

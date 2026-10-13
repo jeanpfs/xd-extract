@@ -20,8 +20,10 @@ const KEEP_KEYS = new Set([
   'paragraphAlign',
   'textTransform',
   'textScript',
+  'blendMode',
 ]);
-const ID_KEYS = new Set(['id', 'ref', 'symbolId']);
+// `syncSourceGuid` names another node's `id`, so both must map to the same token
+const ID_KEYS = new Set(['id', 'ref', 'symbolId', 'syncSourceGuid', 'guid']);
 
 /**
  * Anonymises a document for use as a public fixture. Removes names, ids, text, fonts and every
@@ -54,14 +56,36 @@ export function redactDocument(doc: XdDocument): XdDocument {
     if (value && typeof value === 'object') {
       const o = value as Record<string, unknown>;
       const out: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(o)) out[k] = visit(v, k, o);
+      // these maps are keyed by the same ids their users carry in `ref`, so the keys get the same tokens
+      const keyed = key === 'gradients' || key === 'clipPaths';
+      for (const [k, v] of Object.entries(o)) out[keyed ? idFor(k) : k] = visit(v, k, o);
       return out;
     }
     return value;
   };
 
+  // Only what the converter reads from the resources document: symbol masters, gradients and clip
+  // paths. Its colour swatches, library elements and artboard names are dropped, not anonymised.
+  const res = doc.resources?.resources;
+  const resources: AgcDocument | undefined = doc.resources
+    ? (visit(
+        {
+          version: doc.resources.version,
+          children: [],
+          resources: {
+            meta: { ux: { symbols: res?.meta?.ux?.symbols ?? [] } },
+            gradients: res?.gradients ?? {},
+            clipPaths: (res as { clipPaths?: unknown } | undefined)?.clipPaths ?? {},
+          },
+        },
+        'resources',
+        null,
+      ) as AgcDocument)
+    : undefined;
+
   return {
     source: { kind: 'fixture', ref: 'redacted' },
+    ...(resources ? { resources } : {}),
     artboards: doc.artboards.map((a, i) => ({
       id: idFor(a.id),
       name: `artboard-${i + 1}`,

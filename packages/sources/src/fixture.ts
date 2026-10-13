@@ -15,6 +15,7 @@ export async function loadFixtureDocument(path: string): Promise<XdDocument> {
   }
   return {
     artboards: raw.artboards,
+    ...(raw.resources ? { resources: raw.resources } : {}),
     source: raw.source ?? { kind: 'fixture', ref: basename(dirname(path)) },
   };
 }

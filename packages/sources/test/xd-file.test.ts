@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseAgc } from '@xd-extract/core';
+import { parseAgc, parseDocument } from '@xd-extract/core';
 import { agcDoc, buildManifest, group, rect, solid } from '@xd-extract/testkit';
 import { strToU8, zipSync } from 'fflate';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -90,7 +90,56 @@ describe('loadXdFile', () => {
   });
 });
 
+describe('resources AGC', () => {
+  const resourcesAgc = {
+    version: '1.5.0',
+    children: [],
+    resources: { meta: { ux: { symbols: [] } }, gradients: {} },
+  };
+
+  it('is read when the archive has one, and is absent otherwise', async () => {
+    const withRes = await loadXdFile(
+      await write('res.xd', buildXd({ 'resources/graphics/graphicContent.agc': json(resourcesAgc) })),
+    );
+    expect(withRes.resources).toEqual(resourcesAgc);
+    const without = await loadXdFile(await write('nores.xd', buildXd()));
+    expect(without.resources).toBeUndefined();
+  });
+
+  it('rejects one that is not JSON with InvalidAgc', async () => {
+    const p = await write(
+      'badres.xd',
+      buildXd({ 'resources/graphics/graphicContent.agc': strToU8('{oops') }),
+    );
+    await expect(loadXdFile(p)).rejects.toMatchObject({ code: 'InvalidAgc' });
+  });
+
+  it('resolves a symbol instance whose master only exists there', async () => {
+    const master = group('Btn', [rect('bg', 0, 0, 50, 20, { fill: solid(1, 2, 3) })]);
+    const res = { version: '1.5.0', children: [], resources: { meta: { ux: { symbols: [master] } } } };
+    const page = agcDoc([{ type: 'syncRef', syncSourceGuid: 'id-Btn', guid: 'g1' }]);
+    const doc = await loadXdFile(
+      await write(
+        'sym.xd',
+        buildXd({
+          'artwork/artboard-a1/graphics/graphicContent.agc': json(page),
+          'resources/graphics/graphicContent.agc': json(res),
+        }),
+      ),
+    );
+    const roots = parseDocument(doc).find((a) => a.name === 'Splash')!.roots;
+    expect(roots.map((r) => r.node.name)).toEqual(['Btn']);
+    expect(roots[0]!.warnings).toEqual([]);
+  });
+});
+
 describe('loadFixtureDocument', () => {
+  it('passes the resources document through', async () => {
+    const resources = { version: '1.5.0', children: [], resources: { gradients: {} } };
+    const p = await write('withres.json', JSON.stringify({ artboards: [], resources }));
+    expect((await loadFixtureDocument(p)).resources).toEqual(resources);
+  });
+
   it('reads a document.json and defaults the source ref to the parent directory name', async () => {
     const p = await write(
       'document.json',

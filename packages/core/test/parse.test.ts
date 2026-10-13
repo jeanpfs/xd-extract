@@ -1,5 +1,17 @@
-import { agcDoc, argb, circle, group, rect, solid, text, withTransform } from '@xd-extract/testkit';
+import {
+  agcDoc,
+  argb,
+  circle,
+  group,
+  polygon,
+  rect,
+  solid,
+  syncRef,
+  text,
+  withTransform,
+} from '@xd-extract/testkit';
 import { describe, expect, it } from 'vitest';
+import { parseDocument } from '../src/document';
 import { XdError } from '../src/errors';
 import type { IrGroup, IrShape, IrText } from '../src/ir';
 import { parseAgc } from '../src/parse';
@@ -605,5 +617,177 @@ describe('text', () => {
       },
     };
     expect(t(parse(text('T', 'abc', { style: { filters: [shadow] } }))).shadows).toHaveLength(1);
+  });
+});
+
+describe('polygon', () => {
+  const tri = polygon(
+    'tri',
+    [
+      [37.5, 0],
+      [75, 63],
+      [0, 63],
+    ],
+    { fill: solid(1, 2, 3) },
+  );
+
+  it('becomes a closed path through its points', () => {
+    const r = only(parseAgc(agcDoc([tri])));
+    const g = (r.node as IrShape).geom;
+    expect(g.tag).toBe('path');
+    expect(g.tag === 'path' && g.d).toBe('M 37.5 0 L 75 63 L 0 63 Z');
+    expect(g.pts).toEqual([
+      [37.5, 0],
+      [75, 63],
+      [0, 63],
+    ]);
+    expect(r.warnings).toEqual([]);
+  });
+
+  it('takes inside stroke alignment like any closed shape', () => {
+    const stroked = polygon(
+      'tri',
+      [
+        [0, 0],
+        [10, 0],
+        [5, 8],
+      ],
+      {
+        stroke: { type: 'solid', color: solid(0, 0, 0).color, width: 2, align: 'inside' },
+      },
+    );
+    const r = only(parseAgc(agcDoc([stroked])));
+    expect((r.node as IrShape).stroke?.align).toBe('inside');
+    expect(r.warnings).toEqual([]);
+  });
+
+  it('reports a polygon with fewer than three usable points instead of drawing nothing', () => {
+    const r = parseAgc(
+      agcDoc([
+        group('G', [
+          polygon('bad', [
+            [0, 0],
+            [1, 1],
+          ]),
+          rect('r', 0, 0, 5, 5, { fill: solid(1, 1, 1) }),
+        ]),
+      ]),
+    );
+    expect(only(r).warnings.map((w) => w.code)).toEqual(['unsupported-shape:polygon']);
+  });
+});
+
+describe('symbol instances (syncRef)', () => {
+  const master = () =>
+    group('Btn', [
+      rect('bg', 0, 0, 50, 20, { fill: solid(1, 2, 3) }),
+      rect('dot', 5, 5, 4, 4, { fill: solid(9, 9, 9) }),
+    ]);
+  const names = (n: IrGroup) => n.children.map((c) => c.name);
+
+  it('takes its content from the node whose id it names, and keeps its own position', () => {
+    const inst = syncRef('id-Btn', { transform: { a: 1, b: 0, c: 0, d: 1, tx: 200, ty: 0 } });
+    const roots = parseAgc(agcDoc([master(), inst]));
+    const copy = roots[1]!;
+    expect(copy.warnings).toEqual([]);
+    expect(copy.node.kind).toBe('group');
+    expect(copy.node.name).toBe('Btn');
+    expect(copy.node.transform).toEqual([1, 0, 0, 1, 200, 0]);
+    expect(names(copy.node as IrGroup)).toEqual(['bg', 'dot']);
+  });
+
+  it('uses the source transform when the instance does not carry one', () => {
+    const m = withTransform(master(), { tx: 40, ty: 7 });
+    const roots = parseAgc(agcDoc([m, syncRef('id-Btn')]));
+    expect(roots[1]!.node.transform).toEqual([1, 0, 0, 1, 40, 7]);
+  });
+
+  it('applies the overrides it lists: unchanged children are placeholders, others are full nodes', () => {
+    const inst = syncRef('id-Btn', {
+      group: { children: [syncRef('id-bg'), rect('dot2', 20, 5, 4, 4, { fill: solid(5, 5, 5) })] },
+    });
+    const copy = parseAgc(agcDoc([master(), inst]))[1]!;
+    expect(names(copy.node as IrGroup)).toEqual(['bg', 'dot2']);
+    expect(copy.warnings).toEqual([]);
+  });
+
+  it('finds the source in another artboard', () => {
+    const doc = {
+      source: { kind: 'fixture' as const, ref: 't' },
+      artboards: [
+        { id: 'a', name: 'Home', agc: agcDoc([group('Page', [syncRef('id-Btn')])]) },
+        { id: 'b', name: 'Masters', agc: agcDoc([master()]) },
+      ],
+    };
+    const home = parseDocument(doc)[0]!.roots[0]!;
+    expect(home.warnings).toEqual([]);
+    expect(names((home.node as IrGroup).children[0] as IrGroup)).toEqual(['bg', 'dot']);
+  });
+
+  it('keeps reporting what it cannot resolve: an unknown source, or a loop', () => {
+    const missing = parseAgc(agcDoc([syncRef('nope')]));
+    expect(missing).toHaveLength(0);
+    const inGroup = only(
+      parseAgc(agcDoc([group('G', [syncRef('nope'), rect('r', 0, 0, 5, 5, { fill: solid(1, 1, 1) })])])),
+    );
+    expect(inGroup.warnings.map((w) => w.code)).toEqual(['unsupported-node:syncRef']);
+    const loop = group('Loop', [syncRef('id-Loop')]);
+    const r = only(parseAgc(agcDoc([loop])));
+    expect(r.warnings.map((w) => w.code)).toEqual(['unsupported-node:syncRef']);
+  });
+});
+
+describe('blend modes', () => {
+  const shape = (blendMode?: string) =>
+    rect('r', 0, 0, 5, 5, { fill: solid(1, 1, 1), ...(blendMode ? { blendMode } : {}) });
+  const parsed = (blendMode?: string) => only(parseAgc(agcDoc([shape(blendMode)])));
+
+  it('keeps a CSS blend mode and notes that the backdrop is only what is exported', () => {
+    const r = parsed('multiply');
+    expect((r.node as IrShape).blend).toBe('multiply');
+    expect(r.warnings.map((w) => w.code)).toEqual(['blend-mode-backdrop']);
+  });
+
+  it('knows every mode XD writes', () => {
+    for (const m of [
+      'multiply',
+      'screen',
+      'overlay',
+      'darken',
+      'lighten',
+      'color-dodge',
+      'color-burn',
+      'hard-light',
+      'soft-light',
+      'difference',
+      'exclusion',
+      'hue',
+      'saturation',
+      'color',
+      'luminosity',
+    ]) {
+      expect((parsed(m).node as IrShape).blend, m).toBe(m);
+    }
+  });
+
+  it('draws normal and pass-through as nothing special, without a warning', () => {
+    for (const m of ['normal', 'pass-through']) {
+      const r = parsed(m);
+      expect((r.node as IrShape).blend, m).toBeUndefined();
+      expect(r.warnings, m).toEqual([]);
+    }
+  });
+
+  it('reports a mode it does not know and draws it normally', () => {
+    const r = parsed('weird-mode');
+    expect((r.node as IrShape).blend).toBeUndefined();
+    expect(r.warnings.map((w) => w.code)).toEqual(['unsupported-style:blendMode:weird-mode']);
+  });
+
+  it('reads it on groups and text too', () => {
+    const g = group('G', [shape()], { style: { blendMode: 'screen' } });
+    expect((only(parseAgc(agcDoc([g]))).node as IrGroup).blend).toBe('screen');
+    const t = text('T', 'abc', { style: { blendMode: 'overlay' } });
+    expect((only(parseAgc(agcDoc([t]))).node as IrText).blend).toBe('overlay');
   });
 });

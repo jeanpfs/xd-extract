@@ -20,7 +20,16 @@ const graphics = (key: string, version?: string) => ({
   ],
 });
 
-export function buildManifest(artboards: ManifestArtboardSpec[], extra: Record<string, unknown> = {}) {
+export interface ManifestOptions {
+  /** Adds the document-wide resources/graphics/graphicContent.agc component (symbol masters, gradients). */
+  resources?: { version?: string };
+}
+
+export function buildManifest(
+  artboards: ManifestArtboardSpec[],
+  extra: Record<string, unknown> = {},
+  opts: ManifestOptions = {},
+) {
   return {
     id: 'doc-id',
     ...extra,
@@ -45,6 +54,16 @@ export function buildManifest(artboards: ManifestArtboardSpec[], extra: Record<s
           })),
         ],
       },
+      ...(opts.resources
+        ? [
+            {
+              id: 'dir-resources',
+              name: 'resources',
+              path: 'resources',
+              children: [graphics('resources', opts.resources.version)],
+            },
+          ]
+        : []),
     ],
   };
 }

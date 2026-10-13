@@ -46,6 +46,8 @@ export interface IrShape {
   stroke: Stroke | null;
   opacity: number;
   shadows: Shadow[];
+  /** CSS mix-blend-mode; undefined: normal. */
+  blend?: string;
 }
 
 export interface IrClipShape {
@@ -61,6 +63,8 @@ export interface IrGroup {
   transform: Matrix;
   opacity: number;
   shadows: Shadow[];
+  /** CSS mix-blend-mode; undefined: normal. */
+  blend?: string;
   clip: { maskName: string; shapes: IrClipShape[] } | null;
   children: IrNode[];
 }
@@ -96,6 +100,8 @@ export interface IrText {
   transform: Matrix;
   opacity: number;
   shadows: Shadow[];
+  /** CSS mix-blend-mode; undefined: normal. */
+  blend?: string;
   align: 'left' | 'center' | 'right';
   lines: IrTextLine[];
   /** Local-space corners of the (partly estimated) text box, for the frame. */

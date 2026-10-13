@@ -119,3 +119,26 @@ export const text = (name: string, raw: string, o: TextOpts = {}): AgcNode => {
 };
 
 export { argb };
+
+/** A symbol instance: a placeholder that takes everything from the node whose id is `source`. */
+export const syncRef = (source: string, over: Partial<AgcNode> = {}): AgcNode => ({
+  type: 'syncRef',
+  syncSourceGuid: source,
+  guid: `guid-${source}`,
+  ...over,
+});
+
+export const polygon = (
+  name: string,
+  points: [number, number][],
+  style: AgcStyle = {},
+  extra: Partial<AgcNode> = {},
+): AgcNode => ({
+  type: 'shape',
+  name,
+  id: `id-${name}`,
+  transform: { ...T0 },
+  shape: { type: 'polygon', points: points.map(([x, y]) => ({ x, y })) },
+  style,
+  ...extra,
+});

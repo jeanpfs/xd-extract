@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgcDocument } from '../src/agc';
 import { convertRoot } from '../src/convert';
-import type { XdDocument } from '../src/document';
+import { parseDocument, type XdDocument } from '../src/document';
 import { parseAgc } from '../src/parse';
 import { dropRoots, redactDocument } from '../src/redact';
 
@@ -124,6 +124,7 @@ describe('redactDocument', () => {
       'paragraphAlign',
       'textTransform',
       'textScript',
+      'blendMode',
     ]);
     for (const [key, value] of leaves(red.artboards[0]!.agc)) {
       // rawText keeps its length and line breaks so the stored line layout still indexes into it
@@ -212,5 +213,129 @@ describe('dropRoots', () => {
     const before = JSON.stringify(input);
     dropRoots(input, ['Logo', 'Card']);
     expect(JSON.stringify(input)).toBe(before);
+  });
+});
+
+describe('redactDocument resources', () => {
+  const master = {
+    type: 'group',
+    name: 'Secret Button',
+    id: 'master-uuid',
+    meta: { ux: { symbolId: 'sym-uuid' } },
+    group: {
+      children: [
+        {
+          type: 'shape',
+          name: 'bg',
+          id: 'child-uuid',
+          shape: { type: 'rect', x: 0, y: 0, width: 5, height: 5 },
+        },
+      ],
+    },
+  };
+  const solid = { mode: 'RGB', value: { r: 1, g: 2, b: 3 } };
+  const input: XdDocument = {
+    source: { kind: 'xd-file', ref: 'secret.xd' },
+    artboards: [
+      {
+        id: 'ab-uuid',
+        name: 'Secret page',
+        agc: {
+          version: '1.5.0',
+          children: [
+            {
+              type: 'artboard',
+              artboard: {
+                children: [
+                  { type: 'syncRef', syncSourceGuid: 'master-uuid', guid: 'inst-uuid', transform: T },
+                  {
+                    type: 'shape',
+                    name: 'g',
+                    id: 'g-uuid',
+                    transform: T,
+                    shape: { type: 'rect', x: 0, y: 0, width: 5, height: 5 },
+                    style: {
+                      fill: {
+                        type: 'gradient',
+                        gradient: {
+                          ref: 'grad-uuid',
+                          x1: 0,
+                          y1: 0,
+                          x2: 1,
+                          y2: 0,
+                          units: 'objectBoundingBox',
+                        },
+                      } as never,
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      },
+    ],
+    resources: {
+      version: '1.5.0',
+      children: [],
+      resources: {
+        meta: {
+          ux: {
+            symbols: [master],
+            documentLibrary: { elements: [{ name: 'Brand colours' }] },
+            colorSwatches: [solid],
+          },
+        },
+        gradients: {
+          'grad-uuid': {
+            type: 'linear',
+            stops: [
+              { offset: 0, color: solid },
+              { offset: 1, color: solid },
+            ],
+          },
+        },
+      },
+    } as unknown as XdDocument['resources'],
+  };
+  const red = redactDocument(input);
+  const text = JSON.stringify(red);
+
+  it('keeps symbol masters and gradients, and nothing else from the resources document', () => {
+    expect(red.resources?.resources?.meta?.ux?.symbols).toHaveLength(1);
+    expect(Object.keys(red.resources?.resources?.gradients ?? {})).toHaveLength(1);
+    for (const secret of [
+      'Secret Button',
+      'Brand colours',
+      'master-uuid',
+      'sym-uuid',
+      'grad-uuid',
+      'Secret page',
+    ]) {
+      expect(text).not.toContain(secret);
+    }
+    expect(text).not.toContain('documentLibrary');
+    expect(text).not.toContain('colorSwatches');
+  });
+
+  it('maps a reference and the id it names to the same token', () => {
+    const at = (v: unknown, ...path: (string | number)[]): unknown =>
+      path.reduce<unknown>((o, k) => (o as Record<string | number, unknown>)[k], v);
+    const page = at(red.artboards[0]!.agc, 'children', 0, 'artboard', 'children');
+    const masterId = at(red.resources, 'resources', 'meta', 'ux', 'symbols', 0, 'id');
+    expect(at(page, 0, 'syncSourceGuid')).toBe(masterId);
+    const ref = at(page, 1, 'style', 'fill', 'gradient', 'ref');
+    expect(Object.keys(red.resources?.resources?.gradients ?? {})).toEqual([ref]);
+  });
+
+  it('resolves the instance to the master after redaction', () => {
+    const doc = parseDocument(red);
+    expect(doc[0]!.roots).toHaveLength(2);
+    expect(doc[0]!.roots[0]!.node.kind).toBe('group');
+    expect(doc[0]!.roots[0]!.warnings).toEqual([]);
+  });
+
+  it('writes no resources key when the input had none', () => {
+    expect(redactDocument({ ...input, resources: undefined }).resources).toBeUndefined();
   });
 });

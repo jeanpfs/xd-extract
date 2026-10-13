@@ -1,4 +1,16 @@
-import { agcDoc, argb, circle, group, rect, solid, text, withTransform } from '@xd-extract/testkit';
+import { Resvg } from '@resvg/resvg-js';
+import {
+  agcDoc,
+  argb,
+  circle,
+  group,
+  polygon,
+  rect,
+  solid,
+  syncRef,
+  text,
+  withTransform,
+} from '@xd-extract/testkit';
 import { describe, expect, it } from 'vitest';
 import { convertRoot } from '../src/convert';
 import { parseAgc } from '../src/parse';
@@ -501,5 +513,86 @@ describe('visibleReach', () => {
   it('matches the Gaussian edge: at that distance the shadow is just at the painted threshold', () => {
     // sigma 2, opacity 0.5: upper tail at d is (16/255) / 0.5 = 0.1255 -> z = 1.15 -> d = 2.3
     expect(visibleReach({ r: 4, opacity: 0.5 })).toBeCloseTo(2.3, 1);
+  });
+});
+
+describe('blend modes', () => {
+  const pixel = (svg: string, w: number, x: number, y: number) => {
+    const img = new Resvg(svg, {
+      fitTo: { mode: 'width', value: w },
+      font: { loadSystemFonts: false }, // scanning system fonts makes every render slow and machine-dependent
+    }).render();
+    const i = (y * img.width + x) * 4;
+    return [...img.pixels.slice(i, i + 4)];
+  };
+  // a white 60 wide plate gives the frame; red covers the left, cyan the right, overlapping in the middle
+  const plate = rect('plate', 0, 0, 60, 40, { fill: solid(255, 255, 255) });
+  const red = rect('under', 0, 0, 40, 40, { fill: solid(255, 0, 0) });
+  const base = group('Base', [plate, red]);
+  const over = (extra = {}) => rect('over', 20, 0, 40, 40, { fill: solid(0, 255, 255), ...extra });
+
+  it('emits mix-blend-mode on the element and really blends with what is below it', () => {
+    const { svg } = convert(group('Root', [base, over({ blendMode: 'multiply' })]));
+    expect(svg).toMatch(/<rect[^>]*x="20"[^>]*style="mix-blend-mode:multiply"/);
+    // red x cyan = black where they overlap; the cyan alone stays cyan
+    expect(pixel(svg, 60, 30, 20)).toEqual([0, 0, 0, 255]);
+    expect(pixel(svg, 60, 50, 20)).toEqual([0, 255, 255, 255]);
+    const plain = convert(group('Root', [base, over()])).svg;
+    expect(pixel(plain, 60, 30, 20)).toEqual([0, 255, 255, 255]);
+  });
+
+  it('puts it on the wrapper that carries transform, opacity and filter, once', () => {
+    const shadow = {
+      type: 'dropShadow',
+      global: true,
+      params: {
+        dropShadows: [
+          { dx: 1, dy: 1, r: 1, color: { mode: 'RGB', value: { r: 0, g: 0, b: 0 }, alpha: 0.5 } },
+        ],
+      },
+    };
+    const { svg } = convert(
+      group('Root', [base, over({ blendMode: 'screen', filters: [shadow], opacity: 0.5 })]),
+    );
+    expect(svg).toMatch(/<g opacity="0.5" filter="url\(#shadow-1\)" style="mix-blend-mode:screen"><rect/);
+  });
+
+  it('applies to groups and to text', () => {
+    const g = convert(
+      group('Root', [base, group('G', [over()], { style: { blendMode: 'difference' } })]),
+    ).svg;
+    expect(g).toMatch(/<g style="mix-blend-mode:difference">/);
+    const t = convert(group('Root', [card(), text('T', 'abc', { style: { blendMode: 'multiply' } })])).svg;
+    expect(t).toMatch(/<text [^>]*style="mix-blend-mode:multiply"/);
+  });
+});
+
+describe('polygon', () => {
+  it('emits a closed path', () => {
+    const tri = polygon(
+      'tri',
+      [
+        [37.5, 0],
+        [75, 63],
+        [0, 63],
+      ],
+      { fill: solid(1, 2, 3) },
+    );
+    const { svg, report } = convert(group('Root', [tri]));
+    expect(svg).toContain('<path d="M 37.5 0 L 75 63 L 0 63 Z" fill="rgb(1,2,3)"/>');
+    expect(report.frame).toEqual({ x: 0, y: 0, w: 75, h: 63 });
+  });
+});
+
+describe('symbol instances', () => {
+  it('emit the same art as their source, at their own position', () => {
+    const master = group('Btn', [rect('bg', 0, 0, 50, 20, { fill: solid(1, 2, 3) })]);
+    const inst = group('Page', [
+      withTransform(master, { tx: 0 }),
+      syncRef('id-Btn', { transform: { a: 1, b: 0, c: 0, d: 1, tx: 100, ty: 0 } }),
+    ]);
+    const { svg } = convert(inst);
+    expect(svg.match(/<rect/g)).toHaveLength(2);
+    expect(svg).toContain('matrix(1 0 0 1 100 0)');
   });
 });

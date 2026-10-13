@@ -32,8 +32,10 @@ Every extraction records warnings in the report (`<file>.svg.report.json`) and p
 | `unsupported-fill:<type>` | yes | Fill is not a solid RGB colour (`gradient`, `pattern`, ...) |
 | `unsupported-fill:color-mode-<mode>` | yes | Solid fill in a colour mode other than RGB |
 | `unsupported-stroke:<type>` / `...color-mode-<mode>` | yes | Same, for strokes |
-| `unsupported-shape:<type>` | yes | Shape type not converted |
-| `unsupported-node:<type>` | yes | Node type not converted |
+| `unsupported-shape:<type>` | yes | Shape type not converted (a polygon with fewer than three usable points counts) |
+| `blend-mode-backdrop` | no | A blend mode is applied, but it blends with what is in the exported SVG only, not with layers below it in the design |
+| `unsupported-style:blendMode:<mode>` | no | A blend mode that is not a CSS one; the node is drawn normally |
+| `unsupported-node:<type>` | yes | Node type not converted. For `syncRef` (a symbol instance): its master was not found in the document, so the instance is dropped; a share link whose resources component could not be fetched is the usual cause |
 | `text-font-not-embedded:<family>` | no | Text is live `<text>`; the viewer needs this font or substitutes one |
 | `text-bbox-approximate` | no | A left-aligned line's width is not stored by XD and is estimated (0.6 em per character) for the frame |
 | `text-font-style-unknown` | no | A font style name that is not a known weight; 400 is used |

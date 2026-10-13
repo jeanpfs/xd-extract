@@ -67,8 +67,8 @@ For a share link, pass the URL instead of the file: `xd inventory https://xd.ado
 
 | Converted | Reported as a warning, not converted |
 |---|---|
-| Groups and nested transforms, rectangles (with corner radii), paths (including even-odd), compound shapes, lines, circles, ellipses | Gradient and image (pattern) fills, blur, inner shadows, text stroke and gradient text |
-| Solid fills and strokes with alpha, caps, joins, miter limits, dashes; inside and outside stroke alignment on closed shapes; drop shadows (`global`) on shapes and groups, as an SVG filter | Alignment on lines and open paths (drawn centred) |
+| Groups and nested transforms, rectangles (with corner radii), paths (including even-odd), compound shapes, lines, circles, ellipses, polygons; symbol instances (resolved to their master, with overrides) | Gradient and image (pattern) fills, blur, inner shadows, text stroke and gradient text; a blend mode only sees what is inside the exported SVG (`blend-mode-backdrop`) |
+| Solid fills and strokes with alpha, caps, joins, miter limits, dashes; inside and outside stroke alignment on closed shapes; drop shadows (`global`) on shapes and groups, as an SVG filter; blend modes as `mix-blend-mode` | Alignment on lines and open paths (drawn centred) |
 | Masks as `clipPath`, including masks nudged off the art by a few pixels | `style.clipPath` (repeat-grid masks) |
 | Text as live `<text>`: XD's own line breaks and baselines, per-range font, size, weight, italic and colour, left, centre and right alignment | Superscript and subscript, justified text, other text frame types, a font that is not installed (the viewer substitutes it) |
 | The frame (`viewBox`): the background plate when there is one, else the tight content box | |

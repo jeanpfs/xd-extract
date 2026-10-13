@@ -17,6 +17,7 @@ import type {
   Stroke,
 } from './ir';
 import { IDENTITY, type Matrix, round } from './matrix';
+import { buildSyncIndex, expandSync, type SyncIndex } from './sync';
 import { type Warning, WarningCollector } from './warnings';
 
 export interface ParsedRoot {
@@ -62,6 +63,40 @@ function readPaint(
   const reason = p.type ?? 'unknown';
   w.add(`unsupported-${where}:${reason}`, `${where} of type "${reason}" is not converted yet`, name);
   return { kind: 'unsupported', reason };
+}
+
+/** CSS blend modes XD writes with the same name; `normal` and a group's `pass-through` draw as usual. */
+const BLEND_MODES = new Set([
+  'multiply',
+  'screen',
+  'overlay',
+  'darken',
+  'lighten',
+  'color-dodge',
+  'color-burn',
+  'hard-light',
+  'soft-light',
+  'difference',
+  'exclusion',
+  'hue',
+  'saturation',
+  'color',
+  'luminosity',
+]);
+
+function readBlend(st: AgcStyle, name: string, w: WarningCollector): string | undefined {
+  const mode = st.blendMode;
+  if (!mode || mode === 'normal' || mode === 'pass-through') return undefined;
+  if (!BLEND_MODES.has(mode)) {
+    w.add(`unsupported-style:blendMode:${mode}`, `blend mode "${mode}" is drawn as normal`, name);
+    return undefined;
+  }
+  w.add(
+    'blend-mode-backdrop',
+    'a blend mode blends with what is in the SVG only; layers below the export are not part of its backdrop',
+    name,
+  );
+  return mode;
 }
 
 const FILTERS_MSG = 'a style.filters entry could not be converted';
@@ -182,6 +217,15 @@ function readGeom(s: AgcShape | undefined, name: string, w: WarningCollector): G
       return pathGeom(s.path ?? '', s.winding === 'evenodd', name, w);
     case 'compound':
       return pathGeom(s.path ?? '', false, name, w);
+    case 'polygon': {
+      const pts: Point[] = (s.points ?? []).map((p) => [p.x, p.y]);
+      if (pts.length < 3 || pts.some(([x, y]) => !Number.isFinite(x) || !Number.isFinite(y))) {
+        w.add('unsupported-shape:polygon', 'polygon without three usable points is not converted', name);
+        return null;
+      }
+      const d = `${pts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'} ${round(x)} ${round(y)}`).join(' ')} Z`;
+      return { tag: 'path', d, evenodd: false, pts };
+    }
     case 'rect': {
       const x = s.x ?? 0;
       const y = s.y ?? 0;
@@ -257,6 +301,7 @@ function parseShape(n: AgcNode, inh: Inherited, w: WarningCollector): IrShape | 
   const st = n.style ?? {};
   noteStyle(st, name, w);
   const shadows = readShadows(st, name, w);
+  const blend = readBlend(st, name, w);
   const declaredFill = readPaint(st.fill, 'fill', w, name);
   const declaredStroke = readPaint(st.stroke, 'stroke', w, name);
   const ownFill = declaredFill != null;
@@ -290,6 +335,7 @@ function parseShape(n: AgcNode, inh: Inherited, w: WarningCollector): IrShape | 
     stroke,
     opacity: st.opacity ?? 1,
     shadows,
+    ...(blend ? { blend } : {}),
   };
 }
 
@@ -298,6 +344,7 @@ function parseGroup(n: AgcNode, inh: Inherited, w: WarningCollector): IrGroup {
   const st = n.style ?? {};
   noteStyle(st, name, w);
   const shadows = readShadows(st, name, w);
+  const blend = readBlend(st, name, w);
   const f = readPaint(st.fill, 'fill', w, name);
   const s = readPaint(st.stroke, 'stroke', w, name);
   // A group stroke is only inherited as paint and width; its alignment is not.
@@ -334,6 +381,7 @@ function parseGroup(n: AgcNode, inh: Inherited, w: WarningCollector): IrGroup {
     transform: transformOf(n.transform),
     opacity: st.opacity ?? 1,
     shadows,
+    ...(blend ? { blend } : {}),
     clip,
     children,
   };
@@ -372,6 +420,7 @@ function parseText(n: AgcNode, w: WarningCollector): IrText | null {
   const st = n.style ?? {};
   noteStyle(st, name, w);
   const shadows = readShadows(st, name, w);
+  const blend = readBlend(st, name, w);
 
   const frameType = t.frame?.type;
   if (frameType && frameType !== 'positioned' && frameType !== 'area' && frameType !== 'autoHeight') {
@@ -549,6 +598,7 @@ function parseText(n: AgcNode, w: WarningCollector): IrText | null {
     transform: transformOf(n.transform),
     opacity: st.opacity ?? 1,
     shadows,
+    ...(blend ? { blend } : {}),
     align,
     lines,
     pts,
@@ -572,7 +622,7 @@ function parseNode(n: AgcNode, inh: Inherited, w: WarningCollector, isRoot: bool
 }
 
 /** Parses one AGC document into one IR root per top-level node, each with its own warnings. */
-export function parseAgc(agc: AgcDocument): ParsedRoot[] {
+export function parseAgc(agc: AgcDocument, index: SyncIndex = buildSyncIndex([agc])): ParsedRoot[] {
   if (!agc || !Array.isArray(agc.children))
     throw new XdError('InvalidAgc', 'AGC document has no children array');
   const first = agc.children[0];
@@ -586,7 +636,7 @@ export function parseAgc(agc: AgcDocument): ParsedRoot[] {
         `AGC version ${agc.version} was never tested; only 1.x files were observed`,
       );
     }
-    const node = parseNode(raw, ROOT_INHERITED, w, true);
+    const node = parseNode(expandSync(raw, index), ROOT_INHERITED, w, true);
     if (node) out.push({ node, warnings: w.list() });
   }
   return out;

@@ -106,7 +106,9 @@ export function validateStatic(svg: string, warnings: Warning[] = []): Finding[]
   return findings;
 }
 
-const EMPTY_BAND = 0.02;
+// A drifted mask leaves an edge band with nothing in it. A shape that merely points at the edge (a
+// triangle's apex, a circle's top) still touches it with a pixel or two, which is more than this.
+const EMPTY_BAND = 0.003;
 const PAINTED_BAND = 0.5;
 const EDGE_LINE = 0.25;
 const EMPTY_RENDER = 0.002;

@@ -1,4 +1,11 @@
-import { type AgcDocument, parseManifest, type XdArtboard, type XdDocument, XdError } from '@xd-extract/core';
+import {
+  type AgcDocument,
+  parseManifest,
+  parseResources,
+  type XdArtboard,
+  type XdDocument,
+  XdError,
+} from '@xd-extract/core';
 import { type FetchLike, type Recorder, redactTokens } from './recording';
 
 export interface ShareLinkOptions {
@@ -117,7 +124,33 @@ export async function loadFromManifestUrl(
       ...(a.bounds ? { bounds: a.bounds } : {}),
     });
   }
-  return { artboards, source: { kind: 'share-link', ref } };
+  // Symbol masters and gradients live in one more component. A document that loaded without it
+  // still converts everything that does not use them, so a miss is not an error (a refused token is).
+  const listedResources = parseResources(manifest);
+  let resources: AgcDocument | undefined;
+  if (listedResources) {
+    const revs = [
+      ...new Set(
+        [listedResources.version, learned, manifestRev, '1', '0'].filter((v): v is string => v !== undefined),
+      ),
+    ];
+    for (const rev of revs) {
+      const u = `${base};revision=${rev}?component_id=${listedResources.componentId}&api_key=${apiKey}&access_token=${token}`;
+      const r = await get(f, opts.recorder, u);
+      if (r.status === 401 || r.status === 403) {
+        throw new XdError('TokenExpired', `the resources request was refused (HTTP ${r.status})`);
+      }
+      if (r.status === 200) {
+        try {
+          resources = JSON.parse(r.body) as AgcDocument;
+        } catch {
+          throw new XdError('InvalidAgc', 'the resources AGC is not valid JSON');
+        }
+        break;
+      }
+    }
+  }
+  return { artboards, ...(resources ? { resources } : {}), source: { kind: 'share-link', ref } };
 }
 
 export async function loadShareLink(url: string, opts: ShareLinkOptions = {}): Promise<XdDocument> {

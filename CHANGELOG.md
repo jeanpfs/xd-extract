@@ -11,6 +11,11 @@
 - Two more public fixtures, anonymised and pinned by commit and sha256 in `scripts/fixtures.mjs`: Adobe's XD-to-Flutter test suite (BSD-2-Clause; all gradient types, blend modes, polygons, repeat grids, symbols, blur, shadows, area text) and its example app. `pnpm fixtures:build` redacts all of them. `xd redact` also keeps `textTransform` and `textScript`.
 - Shadow frames follow the visible shadow: the reach of a blur is where its Gaussian edge drops below about 6 % alpha (a faint shadow adds no margin), instead of the full radius. The filter region still covers 3 sigma.
 - Validation: when an SVG contains text, `edge-band-drift` and `tight-frame` are skipped (text is not rasterized, so an edge can look empty only because of what was left out).
+- Symbol instances: a `syncRef` node now takes its content from the node whose id it names (`syncSourceGuid`), with its own transform and the children it overrides (unchanged children are placeholders). Masters are found on every artboard and in the new `resources` document (`XdDocument.resources`), where XD keeps `meta.ux.symbols`. An instance whose master cannot be found stays `unsupported-node:syncRef`.
+- The resources AGC (`resources/graphics/graphicContent.agc`) is now read from `.xd` files and fetched for share links (a miss is not an error; a refused token is `TokenExpired`). `xd redact` keeps only what the converter reads from it (symbols, gradients, clip paths), and gives `syncSourceGuid`, `guid` and the keys of `gradients` and `clipPaths` the same tokens as the ids they refer to.
+- Polygons (`shape.type: polygon`, with `points`) become closed paths and take inside and outside strokes.
+- Blend modes (`style.blendMode`) become `mix-blend-mode` on shapes, groups and text. `normal` and `pass-through` draw as usual; an unknown mode is `unsupported-style:blendMode:<mode>`. `blend-mode-backdrop` reminds that the backdrop is only what is exported.
+- `edge-band-drift` now needs an edge band with essentially nothing in it (under 0.3 %, was 2 %): a triangle's apex or a circle's top is not mask drift.
 - `xd --version` / `-v`.
 - Release workflow: a `v*` tag publishes to npm with provenance and creates the GitHub release from this file.
 - Docs: `docs/reference.md` (errors, warnings, validation findings, file formats, troubleshooting), `CONTRIBUTING.md`, `SECURITY.md`, issue and PR templates.

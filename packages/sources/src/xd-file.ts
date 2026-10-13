@@ -7,7 +7,10 @@ const text = (b: Uint8Array) => new TextDecoder().decode(b);
 
 /** Only inflate what we read: `.xd` files carry large bitmaps under resources/. */
 const wanted = (name: string) =>
-  name === 'mimetype' || name === 'manifest' || /^artwork\/[^/]+\/graphics\/graphicContent\.agc$/.test(name);
+  name === 'mimetype' ||
+  name === 'manifest' ||
+  name === 'resources/graphics/graphicContent.agc' ||
+  /^artwork\/[^/]+\/graphics\/graphicContent\.agc$/.test(name);
 
 export function readXdBytes(bytes: Uint8Array, ref: string): XdDocument {
   let files: Record<string, Uint8Array>;
@@ -47,7 +50,16 @@ export function readXdBytes(bytes: Uint8Array, ref: string): XdDocument {
       ...(a.bounds ? { bounds: a.bounds } : {}),
     });
   }
-  return { artboards, source: { kind: 'xd-file', ref } };
+  let resources: AgcDocument | undefined;
+  const resourcesBytes = files['resources/graphics/graphicContent.agc'];
+  if (resourcesBytes) {
+    try {
+      resources = JSON.parse(text(resourcesBytes)) as AgcDocument;
+    } catch {
+      throw new XdError('InvalidAgc', `${ref}: the resources AGC is not valid JSON`);
+    }
+  }
+  return { artboards, ...(resources ? { resources } : {}), source: { kind: 'xd-file', ref } };
 }
 
 export async function loadXdFile(path: string): Promise<XdDocument> {

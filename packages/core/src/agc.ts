@@ -55,6 +55,7 @@ export interface AgcStyle {
   fill?: AgcPaint;
   stroke?: AgcPaint;
   opacity?: number;
+  blendMode?: string;
   filters?: unknown;
   clipPath?: unknown;
 }
@@ -62,6 +63,10 @@ export interface AgcStyle {
 export interface AgcShape {
   type?: string;
   path?: string;
+  /** polygon */
+  points?: { x: number; y: number }[];
+  /** compound shapes, and a symbol instance's overrides */
+  children?: AgcNode[];
   winding?: string;
   x?: number;
   y?: number;
@@ -90,6 +95,9 @@ export interface AgcNode {
   shape?: AgcShape;
   text?: AgcText;
   group?: { children?: AgcNode[] };
+  /** syncRef: the id of the node this instance takes its content from, and this instance's own id. */
+  syncSourceGuid?: string;
+  guid?: string;
   artboard?: { children?: AgcNode[] };
   meta?: {
     ux?: {
@@ -103,4 +111,6 @@ export interface AgcNode {
 export interface AgcDocument {
   version?: string;
   children?: AgcNode[];
+  /** Only the resources document has this: symbol masters and shared gradients. */
+  resources?: { meta?: { ux?: { symbols?: AgcNode[] } }; gradients?: Record<string, unknown> };
 }

@@ -29,6 +29,16 @@ function strings(n: unknown, acc: string[] = []): string[] {
   return acc;
 }
 
+/** The document-wide `resources/graphics/graphicContent.agc` (symbol masters, gradients), when listed. */
+export function parseResources(manifest: unknown): { componentId: string; version?: string } | null {
+  const tree = manifest as ManifestNode | null;
+  const dir = tree?.children?.find((c) => c.path === 'resources');
+  const graphics = dir?.children?.find((c) => c.path === 'graphics');
+  const comp = graphics?.components?.find((c) => c.path === 'graphicContent.agc');
+  if (!comp?.id) return null;
+  return { componentId: comp.id, ...(comp.version !== undefined ? { version: comp.version } : {}) };
+}
+
 /**
  * The share-link manifest and the `manifest` file inside a `.xd` ZIP share one tree:
  * artwork -> <dir> -> graphics -> components[graphicContent.agc]. Directories without an
