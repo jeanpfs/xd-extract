@@ -1,7 +1,21 @@
-import type { AgcDocument, AgcNode, AgcPaint, AgcShape, AgcStyle, AgcTransform } from './agc';
+import type { AgcDocument, AgcNode, AgcPaint, AgcShape, AgcStyle, AgcTextRange, AgcTransform } from './agc';
 import { type AgcColor, solidCss } from './color';
 import { XdError } from './errors';
-import type { Geom, IrClipShape, IrGroup, IrNode, IrShape, Paint, Point, Shadow, Stroke } from './ir';
+import { fontStyleOf } from './font';
+import type {
+  Geom,
+  IrClipShape,
+  IrGroup,
+  IrNode,
+  IrShape,
+  IrText,
+  IrTextLine,
+  IrTextRun,
+  Paint,
+  Point,
+  Shadow,
+  Stroke,
+} from './ir';
 import { IDENTITY, type Matrix, round } from './matrix';
 import { type Warning, WarningCollector } from './warnings';
 
@@ -323,6 +337,190 @@ function parseGroup(n: AgcNode, inh: Inherited, w: WarningCollector): IrGroup {
   };
 }
 
+/** Width guess per character, in em, for text whose width XD does not store (left-aligned). */
+const EM_WIDTH = 0.6;
+const ASCENT = 0.8;
+const DESCENT = 0.25;
+
+/** `value` is ARGB in an unsigned 32-bit integer. */
+function argbCss(value: number): string {
+  const a = (value >>> 24) & 255;
+  const r = (value >>> 16) & 255;
+  const g = (value >>> 8) & 255;
+  const b = value & 255;
+  return a === 255 ? `rgb(${r},${g},${b})` : `rgba(${r},${g},${b},${round(a / 255)})`;
+}
+
+function parseText(n: AgcNode, w: WarningCollector): IrText | null {
+  const name = n.name ?? '';
+  const t = n.text;
+  const raw = t?.rawText;
+  if (!t || typeof raw !== 'string' || !Array.isArray(t.paragraphs)) {
+    w.add('skipped-text', 'text node has no readable layout and is skipped', name);
+    return null;
+  }
+  const st = n.style ?? {};
+  noteStyle(st, name, w);
+  const shadows = readShadows(st, name, w);
+
+  if (t.frame?.type && t.frame.type !== 'positioned') {
+    w.add(
+      `unsupported-text:frame-${t.frame.type}`,
+      `text frame "${t.frame.type}" was never observed; the line layout is used as is`,
+      name,
+    );
+  }
+  const strokeType = st.stroke?.type;
+  if (strokeType && strokeType !== 'none') {
+    w.add('unsupported-stroke:text', 'a stroke on text is not converted', name);
+  }
+
+  // Style per character range. Without ranged styles, the node's own font and fill apply to everything.
+  const nodeFill = readPaint(st.fill, 'fill', w, name);
+  const nodeFillCss = nodeFill?.kind === 'solid' ? nodeFill.css : null;
+  const ranges: (AgcTextRange & { end: number })[] = [];
+  let at = 0;
+  for (const r of n.meta?.ux?.rangedStyles ?? []) {
+    at += r.length ?? 0;
+    ranges.push({ ...r, end: at });
+  }
+  if (!ranges.length) {
+    ranges.push({
+      end: Number.POSITIVE_INFINITY,
+      fontFamily: st.font?.family,
+      fontStyle: st.font?.style,
+      fontSize: st.font?.size,
+      charSpacing: 0,
+    });
+  }
+  const rangeAt = (i: number) =>
+    ranges.find((r) => i < r.end) ?? (ranges[ranges.length - 1] as (typeof ranges)[number]);
+
+  // Layout warnings are only real if the node survives: whitespace-only text is dropped silently.
+  const pending: [string, string, string | undefined][] = [];
+  const later = (code: string, message: string, example?: string) => pending.push([code, message, example]);
+  const known = new Set<string>();
+  const runOf = (text: string, r: AgcTextRange): IrTextRun => {
+    const family = r.fontFamily ?? st.font?.family ?? 'sans-serif';
+    const size = r.fontSize ?? st.font?.size ?? 16;
+    const { weight, italic } = fontStyleOf(r.fontStyle ?? st.font?.style);
+    if (weight === undefined) {
+      later(
+        'text-font-style-unknown',
+        `font style "${r.fontStyle}" is not a known weight; 400 is used`,
+        name,
+      );
+    }
+    if (!known.has(family)) {
+      known.add(family);
+      later(
+        `text-font-not-embedded:${family}`,
+        `font "${family}" is not embedded: the SVG renders with whatever the viewer has`,
+        name,
+      );
+    }
+    if (r.charSpacing) {
+      later(
+        'text-letter-spacing-unverified',
+        'charSpacing is read as 1/1000 em, which was never observed on a non-zero value',
+        name,
+      );
+    }
+    const fill = r.fill?.value !== undefined ? argbCss(r.fill.value) : nodeFillCss;
+    return {
+      text,
+      family,
+      weight: weight ?? 400,
+      italic,
+      size,
+      letterSpacing: round(((r.charSpacing ?? 0) / 1000) * size),
+      fill,
+    };
+  };
+
+  const lines: IrTextLine[] = [];
+  for (const p of t.paragraphs) {
+    for (const line of p.lines ?? []) {
+      const segs = line.filter((s) => typeof s.from === 'number' && typeof s.to === 'number');
+      if (!segs.length) continue;
+      const runs: IrTextRun[] = [];
+      for (const s of segs) {
+        let from = s.from as number;
+        const to = Math.min(s.to as number, raw.length);
+        while (from < to) {
+          const r = rangeAt(from);
+          // past the last range (text longer than the styles cover) the last style keeps going
+          const stop = r.end > from ? Math.min(to, r.end) : to;
+          runs.push(runOf(raw.slice(from, stop), r));
+          from = stop;
+        }
+      }
+      if (runs.length) lines.push({ x: segs[0]?.x ?? 0, y: segs[0]?.y ?? 0, runs });
+    }
+  }
+  if (!lines.some((l) => l.runs.some((r) => r.text.trim() !== ''))) return null; // paints nothing
+  for (const [code, message, example] of pending) w.add(code, message, example);
+
+  const alignRaw = st.textAttributes?.paragraphAlign;
+  let align: IrText['align'] = 'left';
+  if (alignRaw === 'center' || alignRaw === 'right') align = alignRaw;
+  else if (alignRaw && alignRaw !== 'left') {
+    w.add(
+      `text-align-unsupported:${alignRaw}`,
+      `paragraph alignment "${alignRaw}" is drawn left-aligned`,
+      name,
+    );
+  }
+
+  // Box for the frame. A centred or right-aligned line stores its own width in x, so it is exact;
+  // a left-aligned line has no stored width and is estimated.
+  const pts: Point[] = [];
+  let guessed = false;
+  for (const l of lines) {
+    const size = Math.max(...l.runs.map((r) => r.size));
+    const chars = l.runs.reduce((sum, r) => sum + [...r.text].length, 0);
+    const estimate = l.runs.reduce((sum, r) => sum + [...r.text].length * r.size * EM_WIDTH, 0);
+    let x0: number;
+    let x1: number;
+    if (align === 'center' && l.x < 0) {
+      x0 = l.x;
+      x1 = -l.x;
+    } else if (align === 'right' && l.x < 0) {
+      x0 = l.x;
+      x1 = 0;
+    } else {
+      guessed = guessed || chars > 0;
+      x0 = align === 'left' ? l.x : align === 'center' ? -estimate / 2 : -estimate;
+      x1 = x0 + estimate;
+    }
+    pts.push(
+      [x0, l.y - size * ASCENT],
+      [x1, l.y - size * ASCENT],
+      [x1, l.y + size * DESCENT],
+      [x0, l.y + size * DESCENT],
+    );
+  }
+  if (guessed) {
+    w.add(
+      'text-bbox-approximate',
+      'a text line width is estimated (0.6 em per character); the frame may be off',
+      name,
+    );
+  }
+
+  return {
+    kind: 'text',
+    id: n.id ?? '',
+    name,
+    transform: transformOf(n.transform),
+    opacity: st.opacity ?? 1,
+    shadows,
+    align,
+    lines,
+    pts,
+  };
+}
+
 function parseNode(n: AgcNode, inh: Inherited, w: WarningCollector, isRoot: boolean): IrNode | null {
   // Hidden descendants never paint, so they must not affect frames or warnings.
   // A hidden ROOT is kept: carousel slides are toggled by root opacity.
@@ -330,10 +528,7 @@ function parseNode(n: AgcNode, inh: Inherited, w: WarningCollector, isRoot: bool
   const name = n.name ?? '';
   if (n.type === 'group') return parseGroup(n, inh, w);
   if (n.type === 'shape') return parseShape(n, inh, w);
-  if (n.type === 'text') {
-    w.add('skipped-text', 'text nodes are skipped (text is not implemented)', name);
-    return null;
-  }
+  if (n.type === 'text') return parseText(n, w);
   w.add(
     `unsupported-node:${n.type ?? 'unknown'}`,
     `node type "${n.type ?? 'unknown'}" is not converted`,

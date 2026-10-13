@@ -1,5 +1,6 @@
+import { genericFamily, quoteFamily } from './font';
 import { boxOf, collectPaintFacts, type FrameResult } from './frame';
-import type { Geom, IrGroup, IrNode, IrShape, Stroke } from './ir';
+import type { Geom, IrGroup, IrNode, IrShape, IrText, Stroke } from './ir';
 import { IDENTITY, isIdentity, type Matrix, matrixAttr, mul, round, translate } from './matrix';
 import { shadowBox } from './shadow';
 
@@ -53,6 +54,15 @@ function geomEl(g: Geom, forClip: boolean): { tag: string; attrs: Attrs } {
       };
   }
 }
+
+/** XML 1.0 forbids most control characters, even escaped. */
+const escText = (v: string) =>
+  v
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: that is the point
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]/g, '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 
 function strokeAttrs(out: Attrs, s: Stroke, widthFactor: number): void {
   out.stroke = (s.paint as { css: string }).css;
@@ -205,8 +215,44 @@ export function emitSvg(root: IrNode, frameResult: FrameResult): EmitResult {
     return id;
   };
 
+  const textSvg = (n: IrText, isRoot: boolean): string => {
+    const attrs: Attrs = {};
+    if (!isRoot && !isIdentity(n.transform)) attrs.transform = matrixAttr(n.transform);
+    if (!isRoot && n.opacity !== 1) attrs.opacity = round(n.opacity);
+    attrs['xml:space'] = 'preserve';
+    const filter = shadowRef(n);
+    if (filter) attrs.filter = filter;
+    if (n.align !== 'left') attrs['text-anchor'] = n.align === 'center' ? 'middle' : 'end';
+    const body = n.lines
+      .map((line) =>
+        line.runs
+          .filter((r) => r.text !== '')
+          .map((r, i) =>
+            el(
+              'tspan',
+              {
+                // a line is one text chunk: only its first run is positioned, the rest flow after it
+                x: i === 0 ? (n.align === 'left' ? round(line.x) : 0) : undefined,
+                y: i === 0 ? round(line.y) : undefined,
+                'font-family': `${quoteFamily(r.family)}, ${genericFamily(r.family)}`,
+                'font-size': round(r.size),
+                'font-weight': r.weight,
+                'font-style': r.italic ? 'italic' : undefined,
+                'letter-spacing': r.letterSpacing ? round(r.letterSpacing) : undefined,
+                fill: r.fill ?? 'none',
+              },
+              escText(r.text),
+            ),
+          )
+          .join(''),
+      )
+      .join('');
+    return el('text', attrs, body);
+  };
+
   const walk = (n: IrNode, world: Matrix, isRoot: boolean): string => {
     if (n.kind === 'shape') return shapeSvg(n, isRoot);
+    if (n.kind === 'text') return textSvg(n, isRoot);
     const m = isRoot ? IDENTITY : n.transform;
     const world2 = mul(world, m);
     const attrs: Attrs = {};

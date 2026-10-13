@@ -15,6 +15,9 @@ const KEEP_KEYS = new Set([
   'version',
   'nameL10N',
   'rule',
+  // font weight names and alignment are not identifying; the converter reads both
+  'fontStyle',
+  'paragraphAlign',
 ]);
 const ID_KEYS = new Set(['id', 'ref', 'symbolId']);
 
@@ -38,6 +41,8 @@ export function redactDocument(doc: XdDocument): XdDocument {
   const visit = (value: unknown, key: string, parent: Record<string, unknown> | null): unknown => {
     if (typeof value === 'string') {
       if (KEEP_KEYS.has(key)) return value;
+      // Keep the length and the line breaks: the stored line layout indexes into this string.
+      if (key === 'rawText') return value.replace(/[^\n]/g, 'x');
       if (key === 'path' && parent && (parent.type === 'path' || parent.type === 'compound')) return value;
       if (ID_KEYS.has(key)) return idFor(value);
       if (key === 'name') return `${typeof parent?.type === 'string' ? parent.type : 'node'}-${++names}`;

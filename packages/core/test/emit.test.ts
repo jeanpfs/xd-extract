@@ -1,4 +1,4 @@
-import { agcDoc, circle, group, rect, solid, withTransform } from '@xd-extract/testkit';
+import { agcDoc, argb, circle, group, rect, solid, text, withTransform } from '@xd-extract/testkit';
 import { describe, expect, it } from 'vitest';
 import { convertRoot } from '../src/convert';
 import { parseAgc } from '../src/parse';
@@ -334,5 +334,116 @@ describe('drop shadows', () => {
     const node = withTransform(boxed({ filters: [shadow(1, 1, 1)], opacity: 0.5 }), { tx: 3, ty: 4 });
     const { svg } = convert(group('Root', [card(), node]));
     expect(svg).toMatch(/<g transform="matrix\(1 0 0 1 3 4\)" opacity="0.5" filter="url\(#shadow-1\)"><rect/);
+  });
+});
+
+describe('text', () => {
+  it('emits one <text> at the baseline origin with a <tspan> per XD line', () => {
+    const { svg } = convert(
+      group('Root', [
+        card(),
+        text('T', 'Download\nBrochure', {
+          x: 10,
+          y: 40,
+          fontStyle: 'Medium',
+          fill: [255, 255, 255],
+          lineHeight: 29,
+        }),
+      ]),
+    );
+    expect(svg).toContain('<text transform="matrix(1 0 0 1 10 40)" xml:space="preserve">');
+    expect(svg).toContain(
+      '<tspan x="0" y="0" font-family="Poppins, sans-serif" font-size="20" font-weight="500" fill="rgb(255,255,255)">Download</tspan>',
+    );
+    expect(svg).toContain('<tspan x="0" y="29" ');
+    expect(svg).toContain('>Brochure</tspan></text>');
+  });
+
+  it('anchors centred and right text at the origin, so a fallback font stays centred', () => {
+    const c = convert(group('Root', [card(), text('T', 'abcd', { align: 'center', xs: [-20] })])).svg;
+    expect(c).toContain('text-anchor="middle"');
+    expect(c).toContain('<tspan x="0" y="0"');
+    const r = convert(group('Root', [card(), text('T', 'abcd', { align: 'right', xs: [-40] })])).svg;
+    expect(r).toContain('text-anchor="end"');
+  });
+
+  it('flows later runs of a line without an x, and styles each run', () => {
+    const { svg } = convert(
+      group('Root', [
+        card(),
+        text('T', 'Hello World', {
+          ranges: [
+            {
+              length: 6,
+              fontFamily: 'Open Sans',
+              fontStyle: 'Bold Italic',
+              fontSize: 20,
+              charSpacing: 0,
+              fill: { value: argb([1, 2, 3]) },
+            },
+            {
+              length: 5,
+              fontFamily: 'Open Sans',
+              fontStyle: 'Regular',
+              fontSize: 14,
+              charSpacing: 0,
+              fill: { value: argb([9, 9, 9]) },
+            },
+          ],
+        }),
+      ]),
+    );
+    expect(svg).toMatch(
+      /<tspan x="0" y="0" font-family="'Open Sans', sans-serif" font-size="20" font-weight="700" font-style="italic" fill="rgb\(1,2,3\)">Hello <\/tspan><tspan font-family="'Open Sans', sans-serif" font-size="14" font-weight="400" fill="rgb\(9,9,9\)">World<\/tspan>/,
+    );
+  });
+
+  it('escapes markup and drops characters XML cannot carry', () => {
+    const { svg } = convert(group('Root', [card(), text('T', 'a<b & c\u0001d')]));
+    expect(svg).toContain('>a&lt;b &amp; cd</tspan>');
+  });
+
+  it('chooses a generic fallback by family', () => {
+    const g = (family: string) => convert(group('Root', [card(), text('T', 'a', { family })])).svg;
+    expect(g('Courier New')).toContain('font-family="\'Courier New\', monospace"');
+    expect(g('Playfair Display')).toContain('serif"');
+    expect(g('Poppins')).toContain('font-family="Poppins, sans-serif"');
+  });
+
+  it('gives a text-only root a frame from the layout: exact for centred text, estimated otherwise', () => {
+    const centred = convert(text('T', 'abcd', { x: 100, y: 50, align: 'center', xs: [-20] }));
+    // width = -2 * x = 40; ascent 0.8 * 20, descent 0.25 * 20 about the baseline
+    expect(centred.report.frame).toEqual({ x: -20, y: -16, w: 40, h: 21 });
+    const left = convert(group('Root', [text('T', 'Hi', { x: 10, y: 50, size: 20 })]));
+    // 2 characters * 0.6 em estimate
+    expect(left.report.frame).toEqual({ x: 10, y: 34, w: 24, h: 21 });
+  });
+
+  it('keeps a plate frame when text sits on a plate', () => {
+    const { report } = convert(group('Root', [card(), text('T', 'Hello', { x: 10, y: 50 })]));
+    expect(report.rule).toBe('plate');
+    expect(report.frame).toEqual({ x: 0, y: 0, w: 100, h: 100 });
+  });
+
+  it('draws the shadow of a text node with a filter on the <text>', () => {
+    const shadow = {
+      type: 'dropShadow',
+      global: true,
+      params: {
+        dropShadows: [
+          { dx: 1, dy: 3, r: 3, color: { mode: 'RGB', value: { r: 0, g: 0, b: 0 }, alpha: 0.16 } },
+        ],
+      },
+    };
+    const { svg } = convert(
+      group('Root', [card(), text('T', 'abc', { x: 10, y: 50, style: { filters: [shadow] } })]),
+    );
+    expect(svg).toMatch(/<text transform="[^"]*" xml:space="preserve" filter="url\(#shadow-1\)">/);
+    expect(svg).toContain('<filter id="shadow-1"');
+  });
+
+  it('applies opacity to the <text>', () => {
+    const { svg } = convert(group('Root', [card(), text('T', 'abc', { style: { opacity: 0.5 } })]));
+    expect(svg).toMatch(/<text [^>]*opacity="0.5"/);
   });
 });

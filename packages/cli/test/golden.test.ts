@@ -93,7 +93,7 @@ describe('what the public fixture exercises', () => {
     // Gradient, filters and style.clipPath do not occur in single.xd; the synthetic tests cover them.
     // Inside strokes in this file are all on closed shapes, so they are converted, not warned about.
     const codes = new Set(loaded.flatMap((d) => d.cases.flatMap((c) => c.warnings)));
-    for (const expected of ['skipped-text', 'unsupported-fill:pattern']) {
+    for (const expected of ['text-font-not-embedded:x', 'unsupported-fill:pattern']) {
       expect(codes, expected).toContain(expected);
     }
   });

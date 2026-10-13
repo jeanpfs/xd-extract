@@ -22,7 +22,32 @@ export interface AgcPaint {
   dash?: number[];
 }
 
+export interface AgcTextRange {
+  length?: number;
+  fontFamily?: string;
+  fontStyle?: string;
+  fontSize?: number;
+  charSpacing?: number;
+  /** ARGB as an unsigned 32-bit integer. */
+  fill?: { value?: number };
+}
+
+export interface AgcTextSegment {
+  x?: number;
+  y?: number;
+  from?: number;
+  to?: number;
+}
+
+export interface AgcText {
+  frame?: { type?: string };
+  rawText?: string;
+  paragraphs?: { lines?: AgcTextSegment[][] }[];
+}
+
 export interface AgcStyle {
+  font?: { postscriptName?: string; family?: string; style?: string; size?: number };
+  textAttributes?: { lineHeight?: number; paragraphAlign?: string };
   fill?: AgcPaint;
   stroke?: AgcPaint;
   opacity?: number;
@@ -59,9 +84,16 @@ export interface AgcNode {
   visible?: boolean;
   style?: AgcStyle;
   shape?: AgcShape;
+  text?: AgcText;
   group?: { children?: AgcNode[] };
   artboard?: { children?: AgcNode[] };
-  meta?: { ux?: { isMaskGroup?: boolean; clipPathResources?: { children?: AgcNode[] } } };
+  meta?: {
+    ux?: {
+      isMaskGroup?: boolean;
+      clipPathResources?: { children?: AgcNode[] };
+      rangedStyles?: AgcTextRange[];
+    };
+  };
 }
 
 export interface AgcDocument {

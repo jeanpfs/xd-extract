@@ -8,7 +8,7 @@ export interface InventoryEntry {
   artboardId: string;
   name: string;
   id: string;
-  kind: 'group' | 'shape';
+  kind: 'group' | 'shape' | 'text';
   bbox: { x: number; y: number; w: number; h: number } | null;
   dominantColor: string | null;
   shapes: number;

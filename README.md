@@ -12,7 +12,7 @@ XD share links draw into a `<canvas>`, so right-click and download give you noth
 
 - **Verified:** `.xd` files (one public sample), and a **real share link that carries vector data** (an XD 2.33 design with 6 artboards and 120 top-level nodes): the page, the manifest and every artboard were fetched on the first try, all 117 nodes with geometry converted, and the 26 exports that use masks (`clipPath`) validate. Only one such link has been tested.
 - **Not verified on real data:** the mask-drift correction (it never triggered; it has synthetic tests only), `/spec/` links, password-protected links, and AGC versions other than `1.5.0`. The only *public* link we could find (an Adobe sample) is raster-only. If a link fails, `xd inventory <link> --record dir` captures the exchange (see [Privacy](#privacy)) and an issue with the error code helps a lot.
-- **SVG only.** Gradients, blur, text and embedded images are **not converted**. Each is reported as a warning; nothing is dropped silently. See [What is converted](#what-is-converted).
+- **SVG only.** Gradients, blur and embedded images are **not converted**; text is emitted as live `<text>` and needs its font on the viewer's machine. Each is reported as a warning; nothing is dropped silently. See [What is converted](#what-is-converted).
 - Developed and tested on macOS; CI runs on Linux. Windows is untested.
 
 ## Quick start
@@ -31,21 +31,23 @@ A real session on a public sample (`single.xd` from [xd2svg](https://github.com/
 $ xd inventory design.xd
 artboard | node | kind | bbox | colour | shapes | warnings
 Artboard – 1 | Group 26 | group | 0,1080 1920x4205 | rgb(255,255,255) | 52 | -
-Artboard – 1 | Footer | group | 0,5342 1920x821 | rgb(61,13,13) | 6 | unsupported-fill:pattern,skipped-text
-Artboard – 1 | Market watch | group | 796.8,4891.401 326.2x254.716 | rgb(255,255,255) | 4 | skipped-text
+Artboard – 1 | Footer | group | 0,5342 1920x821 | rgb(61,13,13) | 6 | unsupported-fill:pattern,text-font-not-embedded:Poppins,text-bbox-approximate
+Artboard – 1 | Market watch | group | 394,4688.6 1180x513.4 | rgb(255,255,255) | 4 | text-font-not-embedded:Poppins,text-bbox-approximate
 …
 
 $ xd extract design.xd --node "Sign Up form" -o out/sign-up.svg
-out/sign-up.svg  viewBox="1174 417 371.8 198" rule=content snaps=0 clips=0 warnings=1
-  warning skipped-text (5x): text nodes are skipped (text is not implemented)
+out/sign-up.svg  viewBox="1174 363.8 372 304.2" rule=content snaps=0 clips=0 warnings=2
+  warning text-font-not-embedded:Poppins (5x): font "Poppins" is not embedded: the SVG renders with whatever the viewer has
+  warning text-bbox-approximate (5x): a text line width is estimated (0.6 em per character); the frame may be off
 
 $ xd validate out/sign-up.svg
-out/sign-up.svg: warn extraction:skipped-text: text nodes are skipped (text is not implemented) (5x, e.g. "Read our Regulatory Compilances")
-out/sign-up.svg: warn tight-frame: content reaches all four edges of a content-box frame: strokes may be clipped
-1 file(s): 0 error(s), 2 warning(s)
+out/sign-up.svg: warn extraction:text-font-not-embedded:Poppins: font "Poppins" is not embedded: the SVG renders with whatever the viewer has (5x, e.g. "Read our Regulatory Compilances")
+out/sign-up.svg: warn extraction:text-bbox-approximate: a text line width is estimated (0.6 em per character); the frame may be off (5x, e.g. "Read our Regulatory Compilances")
+out/sign-up.svg: warn text-not-rasterized: text is not rasterized during validation (fonts are not loaded): the raster checks ignore it
+1 file(s): 0 error(s), 3 warning(s)
 ```
 
-`validate` exits `0`: warnings are hints, not verdicts. Here `tight-frame` is a false alarm (the node really is a stack of full-width rectangles); `skipped-text` is a real difference from the design. Open the SVG and **look at it**: validation removes obvious failures, it does not prove the art is right.
+`validate` exits `0`: warnings are hints, not verdicts. Here all three are real: the text uses Poppins, which the viewer must have, the frame around left-aligned text is an estimate, and validation cannot check text pixels. Open the SVG and **look at it**: validation removes obvious failures, it does not prove the art is right.
 
 For a share link, pass the URL instead of the file: `xd inventory https://xd.adobe.com/view/<id>/`.
 
@@ -65,12 +67,13 @@ For a share link, pass the URL instead of the file: `xd inventory https://xd.ado
 
 | Converted | Reported as a warning, not converted |
 |---|---|
-| Groups and nested transforms, rectangles (with corner radii), paths (including even-odd), compound shapes, lines, circles, ellipses | Gradient and image (pattern) fills, blur, inner shadows, text |
+| Groups and nested transforms, rectangles (with corner radii), paths (including even-odd), compound shapes, lines, circles, ellipses | Gradient and image (pattern) fills, blur, inner shadows, text stroke and gradient text |
 | Solid fills and strokes with alpha, caps, joins, miter limits, dashes; inside and outside stroke alignment on closed shapes; drop shadows (`global`) on shapes and groups, as an SVG filter | Alignment on lines and open paths (drawn centred) |
 | Masks as `clipPath`, including masks nudged off the art by a few pixels | `style.clipPath` (repeat-grid masks) |
+| Text as live `<text>`: XD's own line breaks and baselines, per-range font, size, weight, italic and colour, left, centre and right alignment | Text frames other than `positioned`, justified text, a font that is not installed (the viewer substitutes it) |
 | The frame (`viewBox`): the background plate when there is one, else the tight content box | |
 
-Warnings that mean **art is missing** (`unsupported-fill:*`, `unsupported-stroke:*`, `unsupported-shape:*`, `unsupported-node:*`) make `validate` fail. The others (`skipped-text`, `unsupported-style:*`, `stroke-align-ignored:*`) are listed so you know what differs from the design.
+Warnings that mean **art is missing** (`unsupported-fill:*`, `unsupported-stroke:*`, `unsupported-shape:*`, `unsupported-node:*`) make `validate` fail. The others (`text-*`, `skipped-text`, `unsupported-style:*`, `stroke-align-ignored:*`) are listed so you know what differs from the design.
 
 Only AGC `1.x` has been seen (files from 2017-2019). Newer versions produce an `agc-version-untested` warning.
 
@@ -110,7 +113,7 @@ Claude Code plugin: `/plugin marketplace add jeanpfs/xd-extract`, then `/plugin 
 
 - The CLI only fetches the link you give it and the CDN URLs that page names. With `--browser` the page is opened in a real browser, so the page's own scripts (including Adobe's analytics) run as they would for any visitor.
 - `--record <dir>` saves every HTTP response, **including the full design JSON**, with access tokens stripped. Do not commit a recording of a private design.
-- `xd redact` removes names, ids, text and fonts so a design can become a public test fixture. It **keeps the geometry**: the artwork itself must be yours to publish. Use `--exclude "<node name>"` to drop top-level nodes (a client logo, say) before anonymising; a name that matches nothing is an error.
+- `xd redact` removes names, ids, text and fonts so a design can become a public test fixture (text keeps its length and line breaks, as `x`, so it still lays out). It **keeps the geometry**: the artwork itself must be yours to publish. Use `--exclude "<node name>"` to drop top-level nodes (a client logo, say) before anonymising; a name that matches nothing is an error.
 - Designs often contain other companies' logos. The MIT license of this tool and of the sample files does not cover third-party marks.
 
 ## Development

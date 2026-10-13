@@ -65,4 +65,36 @@ export interface IrGroup {
   children: IrNode[];
 }
 
-export type IrNode = IrShape | IrGroup;
+export interface IrTextRun {
+  text: string;
+  family: string;
+  weight: number;
+  italic: boolean;
+  size: number;
+  /** CSS letter-spacing in user units (0: none). */
+  letterSpacing: number;
+  /** null: unsupported paint, drawn as none. */
+  fill: string | null;
+}
+
+/** One laid-out line: XD's own wrapping, `x`/`y` as XD stored them (baseline, node coordinates). */
+export interface IrTextLine {
+  x: number;
+  y: number;
+  runs: IrTextRun[];
+}
+
+export interface IrText {
+  kind: 'text';
+  id: string;
+  name: string;
+  transform: Matrix;
+  opacity: number;
+  shadows: Shadow[];
+  align: 'left' | 'center' | 'right';
+  lines: IrTextLine[];
+  /** Local-space corners of the (partly estimated) text box, for the frame. */
+  pts: Point[];
+}
+
+export type IrNode = IrShape | IrGroup | IrText;

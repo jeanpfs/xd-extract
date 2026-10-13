@@ -34,7 +34,14 @@ Every extraction records warnings in the report (`<file>.svg.report.json`) and p
 | `unsupported-stroke:<type>` / `...color-mode-<mode>` | yes | Same, for strokes |
 | `unsupported-shape:<type>` | yes | Shape type not converted |
 | `unsupported-node:<type>` | yes | Node type not converted |
-| `skipped-text` | no | Text nodes are skipped |
+| `text-font-not-embedded:<family>` | no | Text is live `<text>`; the viewer needs this font or substitutes one |
+| `text-bbox-approximate` | no | A left-aligned line's width is not stored by XD and is estimated (0.6 em per character) for the frame |
+| `text-font-style-unknown` | no | A font style name that is not a known weight; 400 is used |
+| `text-align-unsupported:<value>` | no | Paragraph alignment other than left, centre, right; drawn left |
+| `text-letter-spacing-unverified` | no | A non-zero `charSpacing`, read as 1/1000 em (never observed) |
+| `unsupported-text:frame-<type>` | no | A text frame other than `positioned` (never observed); the stored lines are used as they are |
+| `unsupported-stroke:text` | yes | A stroke on text is not converted |
+| `skipped-text` | no | A text node without a readable layout is skipped |
 | `unsupported-style:filters:<type>` | no | A filter other than a drop shadow (`innerShadow`, blur, ...) is not converted |
 | `unsupported-style:filters:dropShadow-local` | no | A drop shadow without `global: true` (never observed) is not converted |
 | `unsupported-style:filters` | no | A `style.filters` entry was malformed or used a colour mode other than RGB |
@@ -49,7 +56,7 @@ Every extraction records warnings in the report (`<file>.svg.report.json`) and p
 
 Errors: `xml-invalid`, `not-svg`, `no-viewbox`, `empty-svg`, `shape-missing-fill`, `group-in-clippath`, `line-without-stroke`, `nan-number`, `render-failed`, `render-empty`, `frame-mismatch` (with `--expect-same-frame`), plus the fatal extraction warnings above.
 
-Warnings: `edge-band-drift` (one edge band empty, the opposite painted: possible mask drift or off-centre frame), `tight-frame` (content touches all four edges of a content-box frame; strokes may be clipped, often a false alarm for full-width stacks), plus the non-fatal extraction warnings above.
+Warnings: `text-not-rasterized` (fonts are never loaded during validation, so text is removed before the raster checks; an SVG made only of text gets this instead of `render-empty`), `edge-band-drift` (one edge band empty, the opposite painted: possible mask drift or off-centre frame), `tight-frame` (content touches all four edges of a content-box frame; strokes may be clipped, often a false alarm for full-width stacks), plus the non-fatal extraction warnings above.
 
 ## Files
 
@@ -90,5 +97,5 @@ Warnings: `edge-band-drift` (one edge band empty, the opposite painted: possible
 - **`PrivateLink` on a link that opens in your browser:** try `--browser`. If it still fails, the link needs a login; export an `.xd` file instead.
 - **`TokenExpired`:** tokens in share-link manifests are short-lived. Re-run; do not cache recordings.
 - **Empty or half-empty SVG:** run `xd validate`; `render-empty` or `edge-band-drift` points at the frame. Open an issue with the redacted document.
-- **Text missing:** text is not converted yet (`skipped-text`).
+- **Text looks different or is missing:** text is live `<text>` and needs its font on the viewer's machine (`text-font-not-embedded`). The width of left-aligned text is estimated for the frame (`text-bbox-approximate`); if the frame is off, crop with a different node.
 - **Output differs in gradients, blur, images:** not converted yet; see the warnings in the report.

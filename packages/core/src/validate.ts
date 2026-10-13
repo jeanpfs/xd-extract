@@ -65,6 +65,9 @@ export function validateStatic(svg: string, warnings: Warning[] = []): Finding[]
     }
     const nowFill = fillSet || !!el.hasAttribute?.('fill');
     const nowStroke = strokeSet || !!el.hasAttribute?.('stroke');
+    if (el.nodeName === 'text') shapes += 1;
+    // a <text> paints through its <tspan>s, so the fill is checked there
+    if (el.nodeName === 'tspan' && !el.hasAttribute?.('fill') && !fillSet) missingFill += 1;
     if (SHAPES.has(el.nodeName) && !inClip) {
       shapes += 1;
       if (!el.hasAttribute?.('fill') && !fillSet) missingFill += 1;
@@ -110,15 +113,29 @@ const EMPTY_RENDER = 0.002;
 const OPPOSITE = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' } as const;
 
 export function validateRaster(svg: string, opts: { rule?: 'plate' | 'content' } = {}): Finding[] {
+  // Fonts are never loaded here (checks must not depend on the machine), so text is not rasterized.
+  const hasText = /<text[\s>]/.test(svg);
+  const drawn = hasText ? svg.replace(/<text\b[\s\S]*?<\/text>/g, '') : svg;
+  const textNote = hasText
+    ? [
+        warn(
+          'text-not-rasterized',
+          'text is not rasterized during validation (fonts are not loaded): the raster checks ignore it',
+        ),
+      ]
+    : [];
   let r: ReturnType<typeof rasterize>;
   try {
-    r = rasterize(svg);
+    r = rasterize(drawn);
   } catch (e) {
     return [
       err('render-failed', `resvg could not render the SVG: ${e instanceof Error ? e.message : String(e)}`),
     ];
   }
-  if (paintedRatio(r) < EMPTY_RENDER) return [err('render-empty', 'the render is empty or nearly empty')];
+  if (paintedRatio(r) < EMPTY_RENDER) {
+    // an SVG made only of text has nothing else to look at
+    return hasText ? textNote : [err('render-empty', 'the render is empty or nearly empty')];
+  }
 
   const findings: Finding[] = [];
   const k = Math.max(1, Math.round(0.02 * Math.min(r.width, r.height)));
@@ -152,7 +169,7 @@ export function validateRaster(svg: string, opts: { rule?: 'plate' | 'content' }
       );
     }
   }
-  return findings;
+  return [...findings, ...textNote];
 }
 
 export function validateSvg(

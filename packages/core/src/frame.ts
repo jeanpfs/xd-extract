@@ -98,6 +98,12 @@ export function collectPaintFacts(root: IrNode, rootShadows = true): PaintFacts 
       addShadows(n, w2);
       return;
     }
+    if (n.kind === 'text') {
+      // text widens the content box only: it is never a background plate nor a dominant fill
+      facts.content = union(facts.content, boxOf(w2, n.pts));
+      addShadows(n, w2);
+      return;
+    }
     for (const c of n.children) rec(c, w2, false);
     addShadows(n, w2);
   };

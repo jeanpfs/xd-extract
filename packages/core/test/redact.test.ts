@@ -120,9 +120,16 @@ describe('redactDocument', () => {
       'version',
       'nameL10N',
       'rule',
+      'fontStyle',
+      'paragraphAlign',
     ]);
     for (const [key, value] of leaves(red.artboards[0]!.agc)) {
-      const ok = KEEP.has(key) || key === 'path' || /^(id-\d+|[a-z]+-\d+|x)$/.test(value);
+      // rawText keeps its length and line breaks so the stored line layout still indexes into it
+      const ok =
+        KEEP.has(key) ||
+        key === 'path' ||
+        (key === 'rawText' && /^[x\n]+$/.test(value)) ||
+        /^(id-\d+|[a-z]+-\d+|x)$/.test(value);
       expect(ok, `${key}=${value}`).toBe(true);
     }
   });
@@ -137,10 +144,18 @@ describe('redactDocument', () => {
     expect(redactDocument(doc)).toEqual(red);
   });
 
-  it('still parses and converts to the same SVG as the original', () => {
+  it('still parses and converts to the same geometry as the original', () => {
+    const noText = (svg: string) => svg.replace(/<text\b[\s\S]*?<\/text>/g, '');
     const before = convertRoot('a', parseAgc(doc.artboards[0]!.agc)[0]!);
     const after = convertRoot('a', parseAgc(red.artboards[0]!.agc)[0]!);
-    expect(after.svg).toBe(before.svg);
+    expect(noText(after.svg)).toBe(noText(before.svg));
+  });
+
+  it('keeps the length of text, so the laid-out lines still fit, but not its content or font', () => {
+    const after = convertRoot('a', parseAgc(red.artboards[0]!.agc)[0]!).svg;
+    expect(after).toContain('>xxxxxxxxxxx</tspan>');
+    expect(after).not.toContain('password123');
+    expect(after).not.toContain('Helvetica');
   });
 });
 

@@ -26,7 +26,7 @@ npx -y xd-extract inventory <source> --json
 
 ## Reading the output
 
-Each entry is a top-level node of an artboard: `artboard`, `name`, `kind` (`group` or `shape`), `bbox` (`x,y wxh` in artboard space, including half the stroke), `dominantColor` (the solid fill with the largest area), `shapes` (count) and `warnings` (codes such as `skipped-text`, `unsupported-fill:gradient`).
+Each entry is a top-level node of an artboard: `artboard`, `name`, `kind` (`group`, `shape` or `text`), `bbox` (`x,y wxh` in artboard space, including half the stroke), `dominantColor` (the solid fill with the largest area), `shapes` (count) and `warnings` (codes such as `skipped-text`, `unsupported-fill:gradient`).
 
 - A node with `unsupported-fill:*` will not extract faithfully: tell the user before they pick it.
 - The `pasteboard` artboard holds loose objects outside any artboard; icons are sometimes there.
