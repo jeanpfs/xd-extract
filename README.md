@@ -121,11 +121,12 @@ Claude Code plugin: `/plugin marketplace add jeanpfs/xd-extract`, then `/plugin 
 ```bash
 pnpm install
 pnpm build                     # also needed once for the binary test (it is skipped without a build)
-pnpm test                      # unit, public fixture, recorded
+pnpm test                      # unit, public fixtures, recorded
+pnpm fixtures:build            # re-download the pinned upstream files and redact them (needs network)
 pnpm lint && pnpm typecheck && pnpm leakcheck && pnpm skills:check
 ```
 
-Tests come in tiers: a synthetic fixture per rule, one public fixture (anonymised `single.xd`, see [fixtures/public/NOTICE](https://github.com/jeanpfs/xd-extract/blob/main/fixtures/public/NOTICE)), recorded HTTP (tokens stripped), a live check against the Adobe sample (`pnpm test:live`, nightly), and a private tier driven by `XD_PRIVATE_FIXTURE_DIR` that never leaves your machine. Contributor and agent notes are in [AGENTS.md](https://github.com/jeanpfs/xd-extract/blob/main/AGENTS.md).
+Tests come in tiers: a synthetic fixture per rule, three public fixtures (anonymised: `single.xd`, plus Adobe's XD-to-Flutter test suite and example app; see [fixtures/public/NOTICE](https://github.com/jeanpfs/xd-extract/blob/main/fixtures/public/NOTICE)), recorded HTTP (tokens stripped), a live check against the Adobe sample (`pnpm test:live`, nightly), and a private tier driven by `XD_PRIVATE_FIXTURE_DIR` that never leaves your machine. Contributor and agent notes are in [AGENTS.md](https://github.com/jeanpfs/xd-extract/blob/main/AGENTS.md).
 
 ## License
 

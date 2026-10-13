@@ -1,7 +1,7 @@
 import { XdError } from './errors';
 import type { IrNode, Point } from './ir';
 import { apply, IDENTITY, type Matrix, mul } from './matrix';
-import { shadowBox } from './shadow';
+import { shadowBox, visibleReach } from './shadow';
 
 export interface Box {
   x0: number;
@@ -58,7 +58,7 @@ export function collectPaintFacts(root: IrNode, rootShadows = true): PaintFacts 
   const shadowWorld = (n: IrNode, world: Matrix): Box | null => {
     const local = collectPaintFacts(n, false).content;
     if (!local) return null;
-    const s = shadowBox(local, n.shadows, 1);
+    const s = shadowBox(local, n.shadows, visibleReach);
     const corners: Point[] = [
       [s.x0, s.y0],
       [s.x1, s.y0],

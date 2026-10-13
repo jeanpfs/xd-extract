@@ -4,5 +4,6 @@ Copyright (c) 2026 jeanpfs, MIT License (see LICENSE).
 Third-party material
 --------------------
 fixtures/public/ contains anonymised derivatives of files from
-https://github.com/L2jLiga/xd2svg (MIT, Copyright (c) 2017-2019 Andrey Chalkin).
+https://github.com/L2jLiga/xd2svg (MIT, Copyright (c) 2017-2019 Andrey Chalkin) and from
+https://github.com/AdobeXD/xd-to-flutter-plugin (BSD 2-Clause, Copyright 2020 Adobe Inc.).
 See fixtures/public/NOTICE for details and the licence text.

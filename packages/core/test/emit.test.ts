@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { convertRoot } from '../src/convert';
 import { parseAgc } from '../src/parse';
 import { rasterize } from '../src/raster';
+import { visibleReach } from '../src/shadow';
 import { validateRaster } from '../src/validate';
 
 const convert = (...roots: Parameters<typeof agcDoc>[0]) => {
@@ -275,7 +276,14 @@ describe('drop shadows', () => {
     const { svg, report } = convert(group('Root', [boxed({ filters: [shadow(0, 10, 4)] })]));
     // the filled shape is its own plate, and a plate includes its own shadow
     expect(report.rule).toBe('plate');
-    expect(report.frame).toEqual({ x: 6, y: 10, w: 48, h: 54 });
+    // visible reach of a 4 radius, 50 % shadow is about 2.3, not the full radius
+    const reach = visibleReach({ r: 4, opacity: 0.5 });
+    expect(reach).toBeGreaterThan(2);
+    expect(reach).toBeLessThan(4);
+    expect(report.frame.x).toBeCloseTo(10 - reach, 2);
+    expect(report.frame.y).toBe(10);
+    expect(report.frame.w).toBeCloseTo(40 + 2 * reach, 2);
+    expect(report.frame.h).toBeCloseTo(40 + 10 + reach, 2);
     expect(svg).toMatch(/<filter id="shadow-1" filterUnits="userSpaceOnUse"[^>]*>/);
     expect(svg).toContain('<feGaussianBlur in="SourceAlpha" stdDeviation="2"');
     expect(svg).toContain('<feOffset dx="0" dy="10"');
@@ -305,8 +313,10 @@ describe('drop shadows', () => {
       style: { fill: solid(255, 0, 0) },
     });
     const { report } = convert(inherited);
+    const reach = visibleReach({ r: 4, opacity: 0.5 });
     expect(report.rule).toBe('content');
-    expect(report.frame).toEqual({ x: 6, y: 10, w: 48, h: 54 });
+    expect(report.frame.x).toBeCloseTo(10 - reach, 2);
+    expect(report.frame.h).toBeCloseTo(40 + 10 + reach, 2);
   });
 
   it('keeps a plate frame: a shadow of another shape does not widen the background', () => {
@@ -471,5 +481,25 @@ describe('text', () => {
   it('applies opacity to the <text>', () => {
     const { svg } = convert(group('Root', [card(), text('T', 'abc', { style: { opacity: 0.5 } })]));
     expect(svg).toMatch(/<text [^>]*opacity="0.5"/);
+  });
+});
+
+describe('visibleReach', () => {
+  it('is zero without blur or when the shadow is too faint to leave a visible tail', () => {
+    expect(visibleReach({ r: 0, opacity: 1 })).toBe(0);
+    expect(visibleReach({ r: 10, opacity: 0.02 })).toBe(0);
+    expect(visibleReach({ r: 10, opacity: 0.06 })).toBe(0); // the body is faint, its tail is invisible
+  });
+
+  it('grows with radius and opacity, and never exceeds 3 sigma', () => {
+    expect(visibleReach({ r: 8, opacity: 0.5 })).toBeGreaterThan(visibleReach({ r: 4, opacity: 0.5 }));
+    expect(visibleReach({ r: 8, opacity: 1 })).toBeGreaterThan(visibleReach({ r: 8, opacity: 0.2 }));
+    expect(visibleReach({ r: 8, opacity: 1 })).toBeLessThan(12);
+    expect(visibleReach({ r: 3, opacity: 0.1 })).toBe(0);
+  });
+
+  it('matches the Gaussian edge: at that distance the shadow is just at the painted threshold', () => {
+    // sigma 2, opacity 0.5: upper tail at d is (16/255) / 0.5 = 0.1255 -> z = 1.15 -> d = 2.3
+    expect(visibleReach({ r: 4, opacity: 0.5 })).toBeCloseTo(2.3, 1);
   });
 });

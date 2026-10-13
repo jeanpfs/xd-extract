@@ -1,10 +1,22 @@
-The document under fixtures/public/ is an anonymised derivative (names, ids, text and
-fonts removed by `xd redact`; geometry kept) of one file from
-https://github.com/L2jLiga/xd2svg at commit 937365e71fe735751053e918b3ba02cfa546ce7a:
+The documents under fixtures/public/ are anonymised derivatives (names, ids, text and fonts
+removed by `xd redact`; geometry kept) of files from two open source projects. The exact upstream
+files are pinned by commit and sha256 in scripts/fixtures.mjs; rebuild with `pnpm fixtures:build`.
 
-  test/input/single.xd   -> fixtures/public/single/document.json
+  single      https://github.com/L2jLiga/xd2svg @ 937365e71fe735751053e918b3ba02cfa546ce7a
+              test/input/single.xd       (MIT License, below)
+  tests-suite https://github.com/AdobeXD/xd-to-flutter-plugin @ 16e22745ce9e9f67c2c6458be24420a8047be7be
+              test_suite/tests_suite.xd  (BSD 2-Clause License, below)
+  campvibes   https://github.com/AdobeXD/xd-to-flutter-plugin @ 16e22745ce9e9f67c2c6458be24420a8047be7be
+              adobe_xd/example/Campvibes.xd (BSD 2-Clause License, below; "Campvibes" is a fictional
+              brand drawn by Adobe for that example, and its name and every other text are removed)
 
-It is redistributed under the MIT License of that project. The MIT License covers the file, not
+The licences cover the files, not any third-party marks a design may contain; each file was chosen
+because it is a generic template or a synthetic test document, and every node was rendered and checked
+before it was added. A second file from the first project (multi.xd) is deliberately not redistributed.
+
+---- MIT License: xd2svg ----
+
+MIT License of that project. The MIT License covers the file, not
 any third-party marks a design may contain; this file was chosen because it is a generic website
 template. A second file from the same project (multi.xd) is deliberately not redistributed.
 
@@ -29,3 +41,15 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---- BSD 2-Clause License: xd-to-flutter-plugin ----
+
+Copyright 2020 Adobe Inc.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

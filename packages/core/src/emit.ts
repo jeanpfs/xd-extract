@@ -152,7 +152,8 @@ export function emitSvg(root: IrNode, frameResult: FrameResult): EmitResult {
     if (!n.shadows.length) return undefined;
     const local = collectPaintFacts(n, false).content;
     if (!local) return undefined;
-    const r = shadowBox(local, n.shadows, 1.5);
+    // the region must not cut the tail: 3 sigma, whatever is visible
+    const r = shadowBox(local, n.shadows, (s) => s.r * 1.5);
     const region = {
       x: round(r.x0 - 1),
       y: round(r.y0 - 1),

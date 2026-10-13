@@ -18,6 +18,8 @@ const KEEP_KEYS = new Set([
   // font weight names and alignment are not identifying; the converter reads both
   'fontStyle',
   'paragraphAlign',
+  'textTransform',
+  'textScript',
 ]);
 const ID_KEYS = new Set(['id', 'ref', 'symbolId']);
 

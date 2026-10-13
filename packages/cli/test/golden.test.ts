@@ -12,7 +12,13 @@ import { loadFixtureDocument } from '@xd-extract/sources';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = join(import.meta.dirname, '../../../fixtures/public');
-const NAMES = ['single'] as const;
+// Minimum converted roots / goldens per fixture: a three-root example cannot meet the larger bar.
+const FIXTURES = [
+  { name: 'single', minCases: 5, minGolden: 3 },
+  { name: 'tests-suite', minCases: 5, minGolden: 3 },
+  { name: 'campvibes', minCases: 2, minGolden: 2 },
+] as const;
+const NAMES = FIXTURES.map((f) => f.name);
 const GOLDEN_MIN_SHAPES = 3;
 const GOLDEN_MAX_SHAPES = 40;
 const GOLDEN_COUNT = 8;
@@ -64,8 +70,9 @@ const loaded = await Promise.all(
 
 describe.each(loaded)('public fixture $name', ({ name, cases, golden }) => {
   it('converts a meaningful number of roots', () => {
-    expect(cases.length).toBeGreaterThanOrEqual(5);
-    expect(golden.length).toBeGreaterThanOrEqual(3);
+    const min = FIXTURES.find((f) => f.name === name)!;
+    expect(cases.length).toBeGreaterThanOrEqual(min.minCases);
+    expect(golden.length).toBeGreaterThanOrEqual(min.minGolden);
   });
 
   it('emits statically valid SVG for every convertible root', () => {

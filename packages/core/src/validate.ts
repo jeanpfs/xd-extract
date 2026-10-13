@@ -120,7 +120,7 @@ export function validateRaster(svg: string, opts: { rule?: 'plate' | 'content' }
     ? [
         warn(
           'text-not-rasterized',
-          'text is not rasterized during validation (fonts are not loaded): the raster checks ignore it',
+          'text is not rasterized during validation (fonts are not loaded): the checks that read the frame edges (edge-band-drift, tight-frame) are skipped, since text may fill them',
         ),
       ]
     : [];
@@ -136,6 +136,8 @@ export function validateRaster(svg: string, opts: { rule?: 'plate' | 'content' }
     // an SVG made only of text has nothing else to look at
     return hasText ? textNote : [err('render-empty', 'the render is empty or nearly empty')];
   }
+  // Without the text pixels an edge can look empty or full only because of what was left out.
+  if (hasText) return textNote;
 
   const findings: Finding[] = [];
   const k = Math.max(1, Math.round(0.02 * Math.min(r.width, r.height)));

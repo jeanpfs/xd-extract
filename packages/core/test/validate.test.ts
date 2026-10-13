@@ -83,6 +83,19 @@ describe('validateRaster', () => {
     expect(f[0]!.message).toContain('bottom');
   });
 
+  it('does not judge frame edges when text is present, since text is not rasterized', () => {
+    const half = '<rect x="0" y="0" width="100" height="70" fill="#000"/>';
+    const withText = `${half}<text x="10" y="90"><tspan fill="#000">hello</tspan></text>`;
+    expect(codes(validateRaster(svg(half)))).toEqual(['edge-band-drift']);
+    expect(codes(validateRaster(svg(withText)))).toEqual(['text-not-rasterized']);
+    expect(codes(validateRaster(svg(withText), { rule: 'content' }))).toEqual(['text-not-rasterized']);
+  });
+
+  it('reports an SVG made only of text as unchecked, not as empty', () => {
+    const only = '<text x="10" y="50"><tspan fill="#000">hello</tspan></text>';
+    expect(codes(validateRaster(svg(only)))).toEqual(['text-not-rasterized']);
+  });
+
   it('warns about a tight frame only when the frame came from the content box', () => {
     expect(validateRaster(svg(card), { rule: 'plate' })).toEqual([]);
     expect(codes(validateRaster(svg(card), { rule: 'content' }))).toEqual(['tight-frame']);
