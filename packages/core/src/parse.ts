@@ -57,11 +57,18 @@ function noteStyle(st: AgcStyle, name: string, w: WarningCollector): void {
   }
   if (st.clipPath)
     w.add('unsupported-style:clipPath', 'style.clipPath (repeat-grid mask) is not converted', name);
-  const align = st.stroke?.align;
-  if (align && align !== 'center') {
-    w.add(`stroke-align-ignored:${align}`, `stroke align "${align}" is rendered centred`, name);
-  }
 }
+
+const warnAlign = (align: string, name: string, w: WarningCollector): void =>
+  w.add(`stroke-align-ignored:${align}`, `stroke align "${align}" is rendered centred`, name);
+
+/** Every subpath is closed: inside/outside only means something for those. */
+const isClosed = (g: Geom): boolean => {
+  if (g.tag === 'rect' || g.tag === 'ellipse') return true;
+  if (g.tag === 'line') return false;
+  const moves = (g.d.match(/[Mm]/g) ?? []).length;
+  return moves > 0 && moves === (g.d.match(/[Zz]/g) ?? []).length;
+};
 
 const pairs = (d: string): Point[] => {
   const nums = (d.match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi) ?? []).map(Number);
@@ -204,6 +211,13 @@ function parseShape(n: AgcNode, inh: Inherited, w: WarningCollector): IrShape | 
   const stroke: Stroke | null = strokePaint
     ? { paint: strokePaint, width, ...strokeExtras(st.stroke) }
     : null;
+  // Alignment only matters when something is stroked. Closed shapes honour inside/outside (see emit);
+  // anything else is drawn centred and says so.
+  const align = st.stroke?.align;
+  if (stroke && align && align !== 'center') {
+    if ((align === 'inside' || align === 'outside') && isClosed(geom)) stroke.align = align;
+    else warnAlign(align, name, w);
+  }
   return {
     kind: 'shape',
     id: n.id ?? '',
@@ -223,6 +237,9 @@ function parseGroup(n: AgcNode, inh: Inherited, w: WarningCollector): IrGroup {
   noteStyle(st, name, w);
   const f = readPaint(st.fill, 'fill', w, name);
   const s = readPaint(st.stroke, 'stroke', w, name);
+  // A group stroke is only inherited as paint and width; its alignment is not.
+  const groupAlign = st.stroke?.align;
+  if (s && groupAlign && groupAlign !== 'center') warnAlign(groupAlign, name, w);
   // A group-level "none" does not clear what children inherit (matches the prototype).
   const next: Inherited = {
     fill: f ? f : inh.fill,

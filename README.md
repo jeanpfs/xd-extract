@@ -12,7 +12,7 @@ XD share links draw into a `<canvas>`, so right-click and download give you noth
 
 - **Verified:** `.xd` files (one public sample), and a **real share link that carries vector data** (an XD 2.33 design with 6 artboards and 120 top-level nodes): the page, the manifest and every artboard were fetched on the first try, all 117 nodes with geometry converted, and the 26 exports that use masks (`clipPath`) validate. Only one such link has been tested.
 - **Not verified on real data:** the mask-drift correction (it never triggered; it has synthetic tests only), `/spec/` links, password-protected links, and AGC versions other than `1.5.0`. The only *public* link we could find (an Adobe sample) is raster-only. If a link fails, `xd inventory <link> --record dir` captures the exchange (see [Privacy](#privacy)) and an issue with the error code helps a lot.
-- **SVG only.** Gradients, shadows, blur, text, embedded images and inside-aligned strokes are **not converted**. Each is reported as a warning; nothing is dropped silently. See [What is converted](#what-is-converted).
+- **SVG only.** Gradients, shadows, blur, text and embedded images are **not converted**. Each is reported as a warning; nothing is dropped silently. See [What is converted](#what-is-converted).
 - Developed and tested on macOS; CI runs on Linux. Windows is untested.
 
 ## Quick start
@@ -30,24 +30,22 @@ A real session on a public sample (`single.xd` from [xd2svg](https://github.com/
 ```text
 $ xd inventory design.xd
 artboard | node | kind | bbox | colour | shapes | warnings
-Artboard – 1 | Group 26 | group | 0,1080 1920x4205 | rgb(255,255,255) | 52 | stroke-align-ignored:inside
-Artboard – 1 | Footer | group | 0,5342 1920x821 | rgb(61,13,13) | 6 | stroke-align-ignored:inside,unsupported-fill:pattern,skipped-text
-Artboard – 1 | Market watch | group | 796.3,4890.901 327.2x255.216 | rgb(255,255,255) | 4 | skipped-text,stroke-align-ignored:inside
+Artboard – 1 | Group 26 | group | 0,1080 1920x4205 | rgb(255,255,255) | 52 | -
+Artboard – 1 | Footer | group | 0,5342 1920x821 | rgb(61,13,13) | 6 | unsupported-fill:pattern,skipped-text
+Artboard – 1 | Market watch | group | 796.8,4891.401 326.2x254.716 | rgb(255,255,255) | 4 | skipped-text
 …
 
 $ xd extract design.xd --node "Sign Up form" -o out/sign-up.svg
-out/sign-up.svg  viewBox="1174 417 371.8 198" rule=content snaps=0 clips=0 warnings=2
+out/sign-up.svg  viewBox="1174 417 371.8 198" rule=content snaps=0 clips=0 warnings=1
   warning skipped-text (5x): text nodes are skipped (text is not implemented)
-  warning stroke-align-ignored:inside (3x): stroke align "inside" is rendered centred
 
 $ xd validate out/sign-up.svg
 out/sign-up.svg: warn extraction:skipped-text: text nodes are skipped (text is not implemented) (5x, e.g. "Read our Regulatory Compilances")
-out/sign-up.svg: warn extraction:stroke-align-ignored:inside: stroke align "inside" is rendered centred (3x, e.g. "Rectangle 17")
 out/sign-up.svg: warn tight-frame: content reaches all four edges of a content-box frame: strokes may be clipped
-1 file(s): 0 error(s), 3 warning(s)
+1 file(s): 0 error(s), 2 warning(s)
 ```
 
-`validate` exits `0`: warnings are hints, not verdicts. Here `tight-frame` is a false alarm (the node really is a stack of full-width rectangles); the two others are real differences from the design. Open the SVG and **look at it**: validation removes obvious failures, it does not prove the art is right.
+`validate` exits `0`: warnings are hints, not verdicts. Here `tight-frame` is a false alarm (the node really is a stack of full-width rectangles); `skipped-text` is a real difference from the design. Open the SVG and **look at it**: validation removes obvious failures, it does not prove the art is right.
 
 For a share link, pass the URL instead of the file: `xd inventory https://xd.adobe.com/view/<id>/`.
 
@@ -68,7 +66,7 @@ For a share link, pass the URL instead of the file: `xd inventory https://xd.ado
 | Converted | Reported as a warning, not converted |
 |---|---|
 | Groups and nested transforms, rectangles (with corner radii), paths (including even-odd), compound shapes, lines, circles, ellipses | Gradient and image (pattern) fills, shadows and blur, text |
-| Solid fills and strokes with alpha, caps, joins, miter limits, dashes | Inside- or outside-aligned strokes (drawn centred) |
+| Solid fills and strokes with alpha, caps, joins, miter limits, dashes; inside and outside stroke alignment on closed shapes | Alignment on lines and open paths (drawn centred) |
 | Masks as `clipPath`, including masks nudged off the art by a few pixels | `style.clipPath` (repeat-grid masks) |
 | The frame (`viewBox`): the background plate when there is one, else the tight content box | |
 

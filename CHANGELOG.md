@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Inside and outside stroke alignment on closed shapes (rect, ellipse, closed paths): the stroke is drawn at twice the width and clipped to the shape (inside) or masked out of it (outside). The frame no longer includes the outer half of an inside stroke and now includes the full width of an outside one. `stroke-align-ignored:*` is now reported only for lines, open paths and unknown values, and no longer when there is no stroke (XD stores `align` on `stroke: none`). `report.clips` still counts mask-group clips only.
 - `xd --version` / `-v`.
 - Release workflow: a `v*` tag publishes to npm with provenance and creates the GitHub release from this file.
 - Docs: `docs/reference.md` (errors, warnings, validation findings, file formats, troubleshooting), `CONTRIBUTING.md`, `SECURITY.md`, issue and PR templates.

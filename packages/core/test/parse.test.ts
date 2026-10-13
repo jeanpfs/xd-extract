@@ -129,11 +129,40 @@ describe('unsupported content is reported, never silent', () => {
     const codes = only(parseAgc(agcDoc([r])))
       .warnings.map((w) => w.code)
       .sort();
-    expect(codes).toEqual([
-      'stroke-align-ignored:inside',
-      'unsupported-style:clipPath',
-      'unsupported-style:filters',
-    ]);
+    expect(codes).toEqual(['unsupported-style:clipPath', 'unsupported-style:filters']);
+  });
+
+  describe('stroke alignment', () => {
+    const black = solid(0, 0, 0).color;
+    const stroked = (align: string, shape = rect('r', 0, 0, 10, 10)) => {
+      shape.style = { ...shape.style, stroke: { type: 'solid', color: black, width: 2, align } };
+      return only(parseAgc(agcDoc([shape])));
+    };
+
+    it('keeps inside and outside on closed shapes, without a warning', () => {
+      for (const align of ['inside', 'outside'] as const) {
+        const { node, warnings } = stroked(align);
+        expect(warnings).toEqual([]);
+        expect((node as IrShape).stroke?.align).toBe(align);
+      }
+    });
+
+    it('does not warn when there is no stroke to align (XD stores align on stroke: none)', () => {
+      const r = rect('r', 0, 0, 10, 10, { fill: solid(1, 1, 1), stroke: { type: 'none', align: 'inside' } });
+      expect(only(parseAgc(agcDoc([r]))).warnings).toEqual([]);
+    });
+
+    it('still warns where alignment cannot be applied: lines, open paths, unknown values', () => {
+      const line = {
+        ...rect('l', 0, 0, 0, 0),
+        shape: { type: 'line', x1: 0, y1: 0, x2: 10, y2: 0 },
+      };
+      expect(stroked('inside', line).warnings.map((w) => w.code)).toEqual(['stroke-align-ignored:inside']);
+      const open = { ...rect('o', 0, 0, 0, 0), shape: { type: 'path', path: 'M0 0L10 0L10 10' } };
+      expect(stroked('outside', open).warnings.map((w) => w.code)).toEqual(['stroke-align-ignored:outside']);
+      expect(stroked('weird').warnings.map((w) => w.code)).toEqual(['stroke-align-ignored:weird']);
+      expect((stroked('weird').node as IrShape).stroke?.align).toBeUndefined();
+    });
   });
 
   it('keeps warnings scoped to the root they came from', () => {

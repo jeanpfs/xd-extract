@@ -58,7 +58,9 @@ export function collectPaintFacts(root: IrNode): PaintFacts {
       facts.shapes += 1;
       if (n.ownFill && (!facts.plate || area(raw) > area(facts.plate))) facts.plate = raw;
       if (n.fill || n.stroke) {
-        const half = n.stroke ? (n.stroke.width ?? 1) / 2 : 0;
+        const sw = n.stroke ? (n.stroke.width ?? 1) : 0;
+        // inside strokes stay within the shape; outside ones extend by the full width
+        const half = n.stroke?.align === 'inside' ? 0 : n.stroke?.align === 'outside' ? sw : sw / 2;
         facts.content = union(
           facts.content,
           half ? { x0: raw.x0 - half, y0: raw.y0 - half, x1: raw.x1 + half, y1: raw.y1 + half } : raw,

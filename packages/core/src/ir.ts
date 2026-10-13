@@ -12,6 +12,8 @@ export interface Stroke {
   join?: string;
   miterLimit?: number;
   dash?: number[];
+  /** Only set on closed shapes; undefined is centred. */
+  align?: 'inside' | 'outside';
 }
 
 /** `pts` are local-space points used for bounding boxes. */

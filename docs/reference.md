@@ -37,7 +37,7 @@ Every extraction records warnings in the report (`<file>.svg.report.json`) and p
 | `skipped-text` | no | Text nodes are skipped |
 | `unsupported-style:filters` | no | Shadows and blur are not converted |
 | `unsupported-style:clipPath` | no | Repeat-grid mask is not converted |
-| `stroke-align-ignored:inside` / `:outside` | no | Stroke is drawn centred |
+| `stroke-align-ignored:<align>` | no | Alignment other than centre on a line, an open path or an unknown value: drawn centred. Inside and outside on closed shapes are converted |
 | `path-bbox-approximate` | no | Path uses commands other than absolute M/L/C/Z; the frame is approximate |
 | `agc-version-untested:<v>` | no | Only AGC 1.x has been observed |
 

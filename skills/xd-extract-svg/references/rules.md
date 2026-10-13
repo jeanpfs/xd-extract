@@ -17,7 +17,7 @@ Each rule below is implemented and tested in `packages/core`; this file explains
 | `opacity: 0` and `visible: false`: drop inside, **ignore on the exported root** | Carousel and variant slides are toggled by opacity 0 on the top-level group. Honouring it at the root produces an empty file. |
 | Document order is paint order | Verify: the first child should be the background. If it ends up on top, the format is back-to-front and must be reversed. |
 | Skip text, report it | Text needs the font; an illustration export with live text is a liability. |
-| Stroke `align: inside` is rendered centred, and reported | SVG has no inside-stroke attribute; faking it needs clip paths and changes the geometry. |
+| Stroke `align: inside|outside` on closed shapes: stroke at 2x width, clipped to the shape (inside) or masked out of it (outside); the frame grows by the full width for outside | SVG has no stroke alignment attribute. Lines and open paths stay centred and are reported as `stroke-align-ignored:*`. |
 
 ## Choosing the frame (`viewBox`)
 

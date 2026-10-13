@@ -2,6 +2,7 @@ import { agcDoc, circle, group, rect, solid, withTransform } from '@xd-extract/t
 import { describe, expect, it } from 'vitest';
 import { convertRoot } from '../src/convert';
 import { parseAgc } from '../src/parse';
+import { rasterize } from '../src/raster';
 import { validateRaster } from '../src/validate';
 
 const convert = (...roots: Parameters<typeof agcDoc>[0]) => {
@@ -202,5 +203,60 @@ describe('a root that is a single shape', () => {
     const nested = withTransform(rect('inner', 0, 0, 50, 50, { fill: solid(1, 2, 3) }), { tx: 10, ty: 20 });
     const { svg } = convert(group('Root', [card(), nested]));
     expect(svg).toContain('transform="matrix(1 0 0 1 10 20)"');
+  });
+});
+
+describe('stroke alignment', () => {
+  const black = solid(0, 0, 0).color;
+  const aligned = (align: 'inside' | 'outside', extra = {}) =>
+    rect('box', 10, 10, 40, 40, {
+      stroke: { type: 'solid', color: black, width: 10, align },
+      ...extra,
+    });
+  const alphaAt = (svg: string, w: number, x: number, y: number) =>
+    rasterize(svg, w).alpha[y * w + x] as number;
+
+  it('inside: the stroke is doubled and clipped to the shape, so only the inner half paints', () => {
+    const { svg, report } = convert(group('Root', [aligned('inside')]));
+    expect(report.frame).toEqual({ x: 10, y: 10, w: 40, h: 40 });
+    expect(svg).toMatch(/<clipPath id="stroke-clip-1"><rect[^>]*x="10"[^>]*\/><\/clipPath>/);
+    expect(svg).toMatch(/stroke-width="20"[^>]*clip-path="url\(#stroke-clip-1\)"/);
+    // frame is 10..50 rendered at 40 px: the outer 10 px ring is painted, the centre is not
+    expect(alphaAt(svg, 40, 2, 20)).toBeGreaterThan(200);
+    expect(alphaAt(svg, 40, 8, 20)).toBeGreaterThan(200);
+    expect(alphaAt(svg, 40, 12, 20)).toBe(0);
+    expect(alphaAt(svg, 40, 20, 20)).toBe(0);
+  });
+
+  it('outside: the frame grows by the full width and the shape area is masked out of the stroke', () => {
+    const { svg, report } = convert(group('Root', [aligned('outside')]));
+    expect(report.frame).toEqual({ x: 0, y: 0, w: 60, h: 60 });
+    expect(svg).toContain('<mask id="stroke-mask-1"');
+    expect(svg).toMatch(/stroke-width="20"[^>]*mask="url\(#stroke-mask-1\)"/);
+    expect(alphaAt(svg, 60, 5, 30)).toBeGreaterThan(200); // outside ring (0..10)
+    expect(alphaAt(svg, 60, 15, 30)).toBe(0); // shape edge band is NOT stroked
+    expect(alphaAt(svg, 60, 30, 30)).toBe(0);
+  });
+
+  it('keeps the fill under the stroke and applies transform and opacity once, on a wrapper', () => {
+    const shape = withTransform(aligned('inside', { fill: solid(255, 0, 0), opacity: 0.5 }), {
+      tx: 5,
+      ty: 5,
+    });
+    const { svg } = convert(group('Root', [card(), shape]));
+    const g = svg.match(/<g [^>]*opacity="0.5"[^>]*>(.*?)<\/g>/);
+    expect(g?.[0]).toContain('transform="matrix(1 0 0 1 5 5)"');
+    expect(g?.[1]).toMatch(/<rect[^>]*fill="rgb\(255,0,0\)"[^>]*\/><rect[^>]*fill="none"/);
+    expect(g?.[1]).not.toContain('opacity');
+  });
+
+  it('uses the evenodd rule in the clip so holes stay unstroked on the wrong side', () => {
+    const ring = {
+      ...rect('ring', 0, 0, 0, 0),
+      shape: { type: 'path', path: 'M0 0L20 0L20 20L0 20ZM5 5L15 5L15 15L5 15Z', winding: 'evenodd' },
+      style: { stroke: { type: 'solid', color: black, width: 2, align: 'inside' } },
+    };
+    const { svg } = convert(group('Root', [card(), ring]));
+    expect(svg).toMatch(/<clipPath[^>]*><path[^>]*clip-rule="evenodd"/);
   });
 });

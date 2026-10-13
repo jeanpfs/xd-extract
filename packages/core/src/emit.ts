@@ -1,5 +1,5 @@
 import { boxOf, type FrameResult } from './frame';
-import type { Geom, IrGroup, IrNode, IrShape } from './ir';
+import type { Geom, IrGroup, IrNode, IrShape, Stroke } from './ir';
 import { IDENTITY, isIdentity, type Matrix, matrixAttr, mul, round, translate } from './matrix';
 
 export interface Snap {
@@ -53,6 +53,16 @@ function geomEl(g: Geom, forClip: boolean): { tag: string; attrs: Attrs } {
   }
 }
 
+function strokeAttrs(out: Attrs, s: Stroke, widthFactor: number): void {
+  out.stroke = (s.paint as { css: string }).css;
+  if (s.width !== undefined || widthFactor !== 1) out['stroke-width'] = round((s.width ?? 1) * widthFactor);
+  if (s.cap) out['stroke-linecap'] = s.cap;
+  if (s.join) out['stroke-linejoin'] = s.join;
+  if (s.miterLimit !== undefined && (s.join === 'miter' || !s.join))
+    out['stroke-miterlimit'] = round(s.miterLimit);
+  if (s.dash?.length) out['stroke-dasharray'] = s.dash.map(round).join(' ');
+}
+
 /** World-space delta -> the local space of a group whose accumulated matrix is `world`. */
 function toLocal(world: Matrix, dx: number, dy: number): [number, number] | null {
   const [a, b, c, d] = world;
@@ -68,26 +78,54 @@ export function emitSvg(root: IrNode, frameResult: FrameResult): EmitResult {
   const defs: string[] = [];
   const snaps: Snap[] = [];
   let clipSeq = 0;
+  let alignSeq = 0;
 
   const shapeSvg = (n: IrShape, isRoot: boolean): string => {
     const { tag, attrs } = geomEl(n.geom, false);
-    const out: Attrs = { ...attrs };
+    const s = n.stroke;
+    const solidStroke = s && s.paint.kind === 'solid' ? s : null;
+    const aligned = solidStroke?.align ? solidStroke : null;
     // The frame is measured in the root's own coordinates (its transform is ignored), exactly as for a
     // root group, so a root shape must not apply its transform here or it lands outside the viewBox.
-    if (!isRoot && !isIdentity(n.transform)) out.transform = matrixAttr(n.transform);
+    const transform = !isRoot && !isIdentity(n.transform) ? matrixAttr(n.transform) : undefined;
+    const opacity = !isRoot && n.opacity !== 1 ? round(n.opacity) : undefined;
+    const out: Attrs = { ...attrs };
+    if (!aligned) out.transform = transform;
     out.fill = n.fill?.kind === 'solid' ? n.fill.css : 'none'; // stroke-only paths must not inherit SVG's black
-    const s = n.stroke;
-    if (s && s.paint.kind === 'solid') {
-      out.stroke = s.paint.css;
-      if (s.width !== undefined) out['stroke-width'] = round(s.width);
-      if (s.cap) out['stroke-linecap'] = s.cap;
-      if (s.join) out['stroke-linejoin'] = s.join;
-      if (s.miterLimit !== undefined && (s.join === 'miter' || !s.join))
-        out['stroke-miterlimit'] = round(s.miterLimit);
-      if (s.dash?.length) out['stroke-dasharray'] = s.dash.map(round).join(' ');
+    if (solidStroke && !aligned) strokeAttrs(out, solidStroke, 1);
+    if (!aligned) return el(tag, { ...out, opacity });
+
+    // Inside/outside: draw the stroke twice as wide and keep only the wanted half. The fill element
+    // and the stroke element share one wrapper, so transform and opacity apply once.
+    const stroke = solidStroke as Stroke;
+    const key = ++alignSeq;
+    const sa: Attrs = { ...attrs, fill: 'none' };
+    strokeAttrs(sa, stroke, 2);
+    if (stroke.align === 'inside') {
+      const c = geomEl(n.geom, true);
+      const id = `stroke-clip-${key}`;
+      defs.push(el('clipPath', { id }, el(c.tag, c.attrs)));
+      sa['clip-path'] = `url(#${id})`;
+    } else {
+      const id = `stroke-mask-${key}`;
+      const xs = n.geom.pts.map((p) => p[0]);
+      const ys = n.geom.pts.map((p) => p[1]);
+      const m = (stroke.width ?? 1) * Math.max(2, stroke.miterLimit ?? 4);
+      const [x0, y0] = [Math.min(...xs) - m, Math.min(...ys) - m];
+      const [w, h] = [Math.max(...xs) + m - x0, Math.max(...ys) + m - y0];
+      const region = { x: round(x0), y: round(y0), width: round(w), height: round(h) };
+      const hole = geomEl(n.geom, false);
+      defs.push(
+        el(
+          'mask',
+          { id, maskUnits: 'userSpaceOnUse', ...region },
+          el('rect', { ...region, fill: '#fff' }) + el(hole.tag, { ...hole.attrs, fill: '#000' }),
+        ),
+      );
+      sa.mask = `url(#${id})`;
     }
-    if (!isRoot && n.opacity !== 1) out.opacity = round(n.opacity);
-    return el(tag, out);
+    const pair = el(tag, out) + el(tag, sa);
+    return transform || opacity ? el('g', { transform, opacity }, pair) : pair;
   };
 
   const clipDef = (n: IrGroup, world2: Matrix): string => {
@@ -147,6 +185,6 @@ export function emitSvg(root: IrNode, frameResult: FrameResult): EmitResult {
     frame: { x: round(frame.x0), y: round(frame.y0), w: round(fw), h: round(fh) },
     rule: frameResult.rule,
     snaps,
-    clips: defs.length,
+    clips: clipSeq,
   };
 }
