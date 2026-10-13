@@ -28,6 +28,10 @@ export interface AgcTextRange {
   fontStyle?: string;
   fontSize?: number;
   charSpacing?: number;
+  underline?: boolean;
+  strikethrough?: boolean;
+  textTransform?: string;
+  textScript?: string;
   /** ARGB as an unsigned 32-bit integer. */
   fill?: { value?: number };
 }
@@ -40,7 +44,7 @@ export interface AgcTextSegment {
 }
 
 export interface AgcText {
-  frame?: { type?: string };
+  frame?: { type?: string; width?: number; height?: number };
   rawText?: string;
   paragraphs?: { lines?: AgcTextSegment[][] }[];
 }

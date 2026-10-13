@@ -170,6 +170,22 @@ describe('unsupported content is reported, never silent', () => {
       ]);
     });
 
+    it('ignores a disabled effect: XD keeps filters with visible: false', () => {
+      const off = drop({ visible: false });
+      const r = only(
+        parseAgc(
+          agcDoc([
+            rect('r', 0, 0, 5, 5, {
+              fill: solid(1, 1, 1),
+              filters: [off, { type: 'uxdesign#blur', visible: false }],
+            }),
+          ]),
+        ),
+      );
+      expect(r.warnings).toEqual([]);
+      expect((r.node as IrShape).shadows).toEqual([]);
+    });
+
     it('reports what it cannot convert, with the filter type in the code', () => {
       const codesFor = (filters: unknown[]) =>
         only(parseAgc(agcDoc([rect('r', 0, 0, 5, 5, { fill: solid(1, 1, 1), filters })]))).warnings.map(
@@ -367,6 +383,8 @@ describe('text', () => {
       {
         x: 0,
         y: 0,
+        anchorX: 0,
+        anchor: 'start',
         runs: [
           {
             text: 'About Us',
@@ -514,9 +532,9 @@ describe('text', () => {
   });
 
   it('reports a non-positioned frame but still converts it', () => {
-    const r = parse(text('T', 'abc', { frame: 'area' }));
+    const r = parse(text('T', 'abc', { frame: 'weird' }));
     expect(t(r).lines).toHaveLength(1);
-    expect(codes(r)).toContain('unsupported-text:frame-area');
+    expect(codes(r)).toContain('unsupported-text:frame-weird');
   });
 
   it('reports a text stroke and a gradient fill as missing art', () => {
@@ -527,6 +545,53 @@ describe('text', () => {
     const r = parse(noRange);
     expect(codes(r)).toContain('unsupported-fill:gradient');
     expect(t(r).lines[0]!.runs[0]!.fill).toBeNull();
+  });
+
+  it('anchors area and autoHeight text by the frame, since their x is an offset inside it', () => {
+    // centred in a 200 wide frame, line 41.5 wide: x = (200 - 41.5) / 2
+    const area = parse(text('T', 'abcd', { align: 'center', xs: [79.25], frame: 'area', frameWidth: 200 }));
+    expect(t(area).lines[0]).toMatchObject({ anchor: 'middle', anchorX: 100 });
+    const right = parse(text('T', 'abcd', { align: 'right', xs: [81.5], frame: 'area', frameWidth: 168 }));
+    expect(t(right).lines[0]).toMatchObject({ anchor: 'end', anchorX: 168 });
+    // autoHeight stores negative offsets like a positioned text
+    const auto = parse(
+      text('T', 'abcd', { align: 'center', xs: [-94], frame: 'autoHeight', frameWidth: 457 }),
+    );
+    expect(t(auto).lines[0]).toMatchObject({ anchor: 'middle', anchorX: 0 });
+    // no frame width to anchor on: stay where XD put the line
+    const bare = parse(text('T', 'abcd', { align: 'center', xs: [30], frame: 'area' }));
+    expect(t(bare).lines[0]).toMatchObject({ anchor: 'start', anchorX: 30 });
+  });
+
+  it('knows the exact width of area text from its offset and the frame', () => {
+    const r = parse(text('T', 'abcd', { align: 'center', xs: [79.25], frame: 'area', frameWidth: 200 }));
+    expect(codes(r)).not.toContain('text-bbox-approximate');
+    expect(t(r).pts[0]![0]).toBeCloseTo(79.25);
+    expect(t(r).pts[1]![0]).toBeCloseTo(120.75);
+  });
+
+  it('applies textTransform and carries underline and strikethrough', () => {
+    const range = (over: object) => ({
+      length: 5,
+      fontFamily: 'F',
+      fontStyle: 'Regular',
+      fontSize: 10,
+      charSpacing: 0,
+      fill: { value: argb([1, 1, 1]) },
+      ...over,
+    });
+    const run = (over: object) =>
+      t(parse(text('T', 'hello world', { ranges: [range({ length: 11, ...over })] }))).lines[0]!.runs[0]!;
+    expect(run({ textTransform: 'uppercase' }).text).toBe('HELLO WORLD');
+    expect(run({ textTransform: 'lowercase' }).text).toBe('hello world');
+    expect(run({ textTransform: 'titlecase' }).text).toBe('Hello World');
+    expect(run({ textTransform: 'none' }).text).toBe('hello world');
+    expect(run({ underline: true }).decoration).toBe('underline');
+    expect(run({ strikethrough: true }).decoration).toBe('line-through');
+    expect(run({ underline: true, strikethrough: true }).decoration).toBe('underline line-through');
+    expect(run({ underline: false }).decoration).toBeUndefined();
+    const sup = parse(text('T', 'x', { ranges: [range({ length: 1, textScript: 'superscript' })] }));
+    expect(codes(sup)).toContain('text-script-unsupported:superscript');
   });
 
   it('reads a shadow on a text node', () => {

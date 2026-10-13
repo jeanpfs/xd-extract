@@ -39,7 +39,8 @@ Every extraction records warnings in the report (`<file>.svg.report.json`) and p
 | `text-font-style-unknown` | no | A font style name that is not a known weight; 400 is used |
 | `text-align-unsupported:<value>` | no | Paragraph alignment other than left, centre, right; drawn left |
 | `text-letter-spacing-unverified` | no | A non-zero `charSpacing`, read as 1/1000 em (never observed) |
-| `unsupported-text:frame-<type>` | no | A text frame other than `positioned` (never observed); the stored lines are used as they are |
+| `unsupported-text:frame-<type>` | no | A text frame other than `positioned`, `area` or `autoHeight` (never observed); the stored lines are used as they are |
+| `text-script-unsupported:<v>` | no | Superscript or subscript text is drawn at normal size and position |
 | `unsupported-stroke:text` | yes | A stroke on text is not converted |
 | `skipped-text` | no | A text node without a readable layout is skipped |
 | `unsupported-style:filters:<type>` | no | A filter other than a drop shadow (`innerShadow`, blur, ...) is not converted |

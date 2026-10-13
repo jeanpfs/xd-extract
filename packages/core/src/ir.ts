@@ -75,12 +75,17 @@ export interface IrTextRun {
   letterSpacing: number;
   /** null: unsupported paint, drawn as none. */
   fill: string | null;
+  /** CSS text-decoration value; undefined: none. */
+  decoration?: string;
 }
 
 /** One laid-out line: XD's own wrapping, `x`/`y` as XD stored them (baseline, node coordinates). */
 export interface IrTextLine {
   x: number;
   y: number;
+  /** Where the line is anchored in the node's coordinates, and which side of the text sits there. */
+  anchorX: number;
+  anchor: 'start' | 'middle' | 'end';
   runs: IrTextRun[];
 }
 

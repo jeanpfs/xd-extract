@@ -76,6 +76,8 @@ function readShadows(st: AgcStyle, name: string, w: WarningCollector): Shadow[] 
   }
   const out: Shadow[] = [];
   for (const f of filters as Record<string, unknown>[]) {
+    // XD keeps a disabled effect in the file with visible: false; it paints nothing.
+    if (f?.visible === false) continue;
     const type = typeof f?.type === 'string' ? f.type : undefined;
     if (type !== undefined && type !== 'dropShadow') {
       w.add(`unsupported-style:filters:${type}`, `filter "${type}" is not converted`, name);
@@ -342,6 +344,14 @@ const EM_WIDTH = 0.6;
 const ASCENT = 0.8;
 const DESCENT = 0.25;
 
+function applyTransform(text: string, how: string | undefined): string {
+  if (how === 'uppercase') return text.toUpperCase();
+  if (how === 'lowercase') return text.toLowerCase();
+  if (how === 'titlecase')
+    return text.replace(/(^|\s)(\S)/g, (_, sp: string, c: string) => sp + c.toUpperCase());
+  return text;
+}
+
 /** `value` is ARGB in an unsigned 32-bit integer. */
 function argbCss(value: number): string {
   const a = (value >>> 24) & 255;
@@ -363,13 +373,15 @@ function parseText(n: AgcNode, w: WarningCollector): IrText | null {
   noteStyle(st, name, w);
   const shadows = readShadows(st, name, w);
 
-  if (t.frame?.type && t.frame.type !== 'positioned') {
+  const frameType = t.frame?.type;
+  if (frameType && frameType !== 'positioned' && frameType !== 'area' && frameType !== 'autoHeight') {
     w.add(
-      `unsupported-text:frame-${t.frame.type}`,
-      `text frame "${t.frame.type}" was never observed; the line layout is used as is`,
+      `unsupported-text:frame-${frameType}`,
+      `text frame "${frameType}" was never observed; the line layout is used as is`,
       name,
     );
   }
+  const frameWidth = typeof t.frame?.width === 'number' ? t.frame.width : undefined;
   const strokeType = st.stroke?.type;
   if (strokeType && strokeType !== 'none') {
     w.add('unsupported-stroke:text', 'a stroke on text is not converted', name);
@@ -427,8 +439,19 @@ function parseText(n: AgcNode, w: WarningCollector): IrText | null {
       );
     }
     const fill = r.fill?.value !== undefined ? argbCss(r.fill.value) : nodeFillCss;
+    if (r.textScript && r.textScript !== 'none') {
+      later(
+        `text-script-unsupported:${r.textScript}`,
+        `text script "${r.textScript}" is drawn at normal size`,
+        name,
+      );
+    }
+    const decoration = [r.underline ? 'underline' : '', r.strikethrough ? 'line-through' : '']
+      .filter(Boolean)
+      .join(' ');
     return {
-      text,
+      ...(decoration ? { decoration } : {}),
+      text: applyTransform(text, r.textTransform),
       family,
       weight: weight ?? 400,
       italic,
@@ -455,7 +478,8 @@ function parseText(n: AgcNode, w: WarningCollector): IrText | null {
           from = stop;
         }
       }
-      if (runs.length) lines.push({ x: segs[0]?.x ?? 0, y: segs[0]?.y ?? 0, runs });
+      if (runs.length)
+        lines.push({ x: segs[0]?.x ?? 0, y: segs[0]?.y ?? 0, anchorX: 0, anchor: 'start', runs });
     }
   }
   if (!lines.some((l) => l.runs.some((r) => r.text.trim() !== ''))) return null; // paints nothing
@@ -472,8 +496,12 @@ function parseText(n: AgcNode, w: WarningCollector): IrText | null {
     );
   }
 
-  // Box for the frame. A centred or right-aligned line stores its own width in x, so it is exact;
-  // a left-aligned line has no stored width and is estimated.
+  // Where each line sits, and its box for the frame.
+  //  - positioned / autoHeight: a centred or right-aligned line stores x as a negative offset from the
+  //    origin, so it is anchored at 0 and its width is -2x (centre) or -x (right): exact.
+  //  - area: x is the offset inside the frame, so the line is anchored at the frame's centre or right
+  //    edge, and the width is frame - 2x (centre) or frame - x (right): exact.
+  //  - left-aligned, or no frame width to anchor on: the width is not stored and is estimated.
   const pts: Point[] = [];
   let guessed = false;
   for (const l of lines) {
@@ -482,16 +510,22 @@ function parseText(n: AgcNode, w: WarningCollector): IrText | null {
     const estimate = l.runs.reduce((sum, r) => sum + [...r.text].length * r.size * EM_WIDTH, 0);
     let x0: number;
     let x1: number;
-    if (align === 'center' && l.x < 0) {
+    if (align !== 'left' && l.x < 0) {
+      l.anchorX = 0;
+      l.anchor = align === 'center' ? 'middle' : 'end';
       x0 = l.x;
-      x1 = -l.x;
-    } else if (align === 'right' && l.x < 0) {
+      x1 = align === 'center' ? -l.x : 0;
+    } else if (align !== 'left' && frameWidth !== undefined) {
+      l.anchorX = align === 'center' ? frameWidth / 2 : frameWidth;
+      l.anchor = align === 'center' ? 'middle' : 'end';
       x0 = l.x;
-      x1 = 0;
+      x1 = align === 'center' ? frameWidth - l.x : frameWidth;
     } else {
+      l.anchorX = l.x;
+      l.anchor = 'start';
       guessed = guessed || chars > 0;
-      x0 = align === 'left' ? l.x : align === 'center' ? -estimate / 2 : -estimate;
-      x1 = x0 + estimate;
+      x0 = l.x;
+      x1 = l.x + estimate;
     }
     pts.push(
       [x0, l.y - size * ASCENT],

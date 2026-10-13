@@ -222,7 +222,6 @@ export function emitSvg(root: IrNode, frameResult: FrameResult): EmitResult {
     attrs['xml:space'] = 'preserve';
     const filter = shadowRef(n);
     if (filter) attrs.filter = filter;
-    if (n.align !== 'left') attrs['text-anchor'] = n.align === 'center' ? 'middle' : 'end';
     const body = n.lines
       .map((line) =>
         line.runs
@@ -232,14 +231,16 @@ export function emitSvg(root: IrNode, frameResult: FrameResult): EmitResult {
               'tspan',
               {
                 // a line is one text chunk: only its first run is positioned, the rest flow after it
-                x: i === 0 ? (n.align === 'left' ? round(line.x) : 0) : undefined,
+                x: i === 0 ? round(line.anchorX) : undefined,
                 y: i === 0 ? round(line.y) : undefined,
+                'text-anchor': i === 0 && line.anchor !== 'start' ? line.anchor : undefined,
                 'font-family': `${quoteFamily(r.family)}, ${genericFamily(r.family)}`,
                 'font-size': round(r.size),
                 'font-weight': r.weight,
                 'font-style': r.italic ? 'italic' : undefined,
                 'letter-spacing': r.letterSpacing ? round(r.letterSpacing) : undefined,
                 fill: r.fill ?? 'none',
+                'text-decoration': r.decoration,
               },
               escText(r.text),
             ),

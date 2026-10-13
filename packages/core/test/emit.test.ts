@@ -367,6 +367,32 @@ describe('text', () => {
     expect(r).toContain('text-anchor="end"');
   });
 
+  it('anchors each line where the parser said, and adds decoration', () => {
+    const { svg } = convert(
+      group('Root', [
+        card(),
+        text('T', 'abcd', {
+          align: 'center',
+          xs: [79.25],
+          frame: 'area',
+          frameWidth: 200,
+          ranges: [
+            {
+              length: 4,
+              fontFamily: 'F',
+              fontStyle: 'Regular',
+              fontSize: 10,
+              charSpacing: 0,
+              underline: true,
+              fill: { value: argb([1, 1, 1]) },
+            },
+          ],
+        }),
+      ]),
+    );
+    expect(svg).toMatch(/<tspan x="100" y="0" text-anchor="middle" [^>]*text-decoration="underline"/);
+  });
+
   it('flows later runs of a line without an x, and styles each run', () => {
     const { svg } = convert(
       group('Root', [
