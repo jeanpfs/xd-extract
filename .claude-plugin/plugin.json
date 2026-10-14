@@ -2,6 +2,6 @@
   "name": "xd-extract",
   "version": "0.2.1",
   "description": "Extract SVG vectors from Adobe XD share links and .xd files, inventory their nodes and validate the result.",
-  "author": { "name": "jeanpfs" },
+  "author": { "name": "jean.pierre" },
   "license": "MIT"
 }
