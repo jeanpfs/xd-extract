@@ -1,0 +1,24 @@
+name: Bug report
+description: Wrong or missing SVG, a crash, or a bad validation verdict
+labels: [bug]
+body:
+  - type: textarea
+    id: command
+    attributes:
+      label: Command and output
+      description: "`xd --version`, the exact command, and the warnings it printed."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected / what you got
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Source
+      description: "Public share link, `.xd` file, or private? If private, do NOT attach it. Run `xd redact` and attach the result only if you are allowed to share it."
+    validations:
+      required: true
