@@ -255,19 +255,50 @@ function readBlend(st: AgcStyle, name: string, w: Scope): string | undefined {
 
 const FILTERS_MSG = 'a style.filters entry could not be converted';
 
-/** Drop shadows become IR; every other filter, and any shadow we cannot read exactly, is reported. */
-function readShadows(st: AgcStyle, name: string, w: Scope): Shadow[] {
+/** What the filters of a node become: shadows and an object blur. Everything else is reported. */
+interface Effects {
+  shadows: Shadow[];
+  blur?: number;
+}
+
+/** Drop shadows and object blur become IR; every other filter, and any we cannot read exactly, is reported. */
+function readEffects(st: AgcStyle, name: string, w: Scope): Effects {
   const filters = st.filters;
-  if (!filters || (Array.isArray(filters) && filters.length === 0)) return [];
+  if (!filters || (Array.isArray(filters) && filters.length === 0)) return { shadows: [] };
   if (!Array.isArray(filters)) {
     w.add('unsupported-style:filters', FILTERS_MSG, name);
-    return [];
+    return { shadows: [] };
   }
-  const out: Shadow[] = [];
+  const shadows: Shadow[] = [];
+  let variance = 0;
   for (const f of filters as Record<string, unknown>[]) {
     // XD keeps a disabled effect in the file with visible: false; it paints nothing.
     if (f?.visible === false) continue;
     const type = typeof f?.type === 'string' ? f.type : undefined;
+    if (type === 'uxdesign#blur') {
+      const p = f.params as { blurAmount?: unknown; backgroundEffect?: unknown } | undefined;
+      const amount = p?.blurAmount;
+      if (typeof amount !== 'number' || !Number.isFinite(amount) || amount < 0) {
+        w.add('unsupported-style:filters', FILTERS_MSG, name);
+      } else if (p?.backgroundEffect === true) {
+        // A background blur blurs what is behind the shape; an SVG cannot read those pixels.
+        w.add(
+          'unsupported-style:filters:uxdesign#blur-background',
+          'a background blur needs the pixels behind the shape, which an SVG cannot read',
+          name,
+        );
+      } else if (f.global !== true) {
+        w.add(
+          'unsupported-style:filters:uxdesign#blur-local',
+          'blur without global: true is not converted',
+          name,
+        );
+      } else {
+        // XD's blur amount is taken as the Gaussian's standard deviation; two blurs add in variance.
+        variance += amount * amount;
+      }
+      continue;
+    }
     if (type !== undefined && type !== 'dropShadow') {
       w.add(`unsupported-style:filters:${type}`, `filter "${type}" is not converted`, name);
       continue;
@@ -287,9 +318,9 @@ function readShadows(st: AgcStyle, name: string, w: Scope): Shadow[] {
       );
       continue;
     }
-    out.push(...(parsed as Shadow[]));
+    shadows.push(...(parsed as Shadow[]));
   }
-  return out;
+  return { shadows, ...(variance > 0 ? { blur: Math.sqrt(variance) } : {}) };
 }
 
 function readShadow(raw: unknown): Shadow | null {
@@ -454,7 +485,7 @@ function parseShape(n: AgcNode, inh: Inherited, w: Scope): IrShape | null {
   if (!geom) return null;
   const st = n.style ?? {};
   noteStyle(st, name, w);
-  const shadows = readShadows(st, name, w);
+  const { shadows, blur: objectBlur } = readEffects(st, name, w);
   const blend = readBlend(st, name, w);
   const declaredFill = readPaint(st.fill, 'fill', w, name);
   const declaredStroke = readPaint(st.stroke, 'stroke', w, name);
@@ -491,6 +522,7 @@ function parseShape(n: AgcNode, inh: Inherited, w: Scope): IrShape | null {
     stroke,
     opacity: st.opacity ?? 1,
     shadows,
+    ...(objectBlur ? { blur: objectBlur } : {}),
     ...(blend ? { blend } : {}),
   };
 }
@@ -499,7 +531,7 @@ function parseGroup(n: AgcNode, inh: Inherited, w: Scope): IrGroup {
   const name = n.name ?? '';
   const st = n.style ?? {};
   noteStyle(st, name, w);
-  const shadows = readShadows(st, name, w);
+  const { shadows, blur: objectBlur } = readEffects(st, name, w);
   const blend = readBlend(st, name, w);
   const f = readPaint(st.fill, 'fill', w, name);
   const s = readPaint(st.stroke, 'stroke', w, name);
@@ -537,6 +569,7 @@ function parseGroup(n: AgcNode, inh: Inherited, w: Scope): IrGroup {
     transform: transformOf(n.transform),
     opacity: st.opacity ?? 1,
     shadows,
+    ...(objectBlur ? { blur: objectBlur } : {}),
     ...(blend ? { blend } : {}),
     clip,
     children,
@@ -575,7 +608,7 @@ function parseText(n: AgcNode, w: Scope): IrText | null {
   }
   const st = n.style ?? {};
   noteStyle(st, name, w);
-  const shadows = readShadows(st, name, w);
+  const { shadows, blur: objectBlur } = readEffects(st, name, w);
   const blend = readBlend(st, name, w);
 
   const frameType = t.frame?.type;
@@ -758,6 +791,7 @@ function parseText(n: AgcNode, w: Scope): IrText | null {
     transform: transformOf(n.transform),
     opacity: st.opacity ?? 1,
     shadows,
+    ...(objectBlur ? { blur: objectBlur } : {}),
     ...(blend ? { blend } : {}),
     align,
     lines,

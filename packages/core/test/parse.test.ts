@@ -1139,3 +1139,70 @@ describe('image fills', () => {
     expect(codes(tiny)).toEqual(['unsupported-fill:pattern-too-large']);
   });
 });
+
+describe('object blur', () => {
+  const blur = (over: Record<string, unknown> = {}, params: Record<string, unknown> = {}) => ({
+    type: 'uxdesign#blur',
+    global: true,
+    params: { blurAmount: 5, brightnessAmount: 15, fillOpacity: 0, backgroundEffect: false, ...params },
+    ...over,
+  });
+  const parsed = (filters: unknown[]) =>
+    only(parseAgc(agcDoc([rect('r', 0, 0, 5, 5, { fill: solid(1, 1, 1), filters })])));
+  const codes = (r: ReturnType<typeof parsed>) => r.warnings.map((w) => w.code);
+
+  it('reads an object blur as a Gaussian of that amount, without a warning', () => {
+    const r = parsed([blur()]);
+    expect((r.node as IrShape).blur).toBe(5);
+    expect(codes(r)).toEqual([]);
+  });
+
+  it('ignores brightness and fill opacity, which only a background blur has', () => {
+    expect((parsed([blur({}, { brightnessAmount: -50, fillOpacity: 1 })]).node as IrShape).blur).toBe(5);
+  });
+
+  it('reads it on groups and text', () => {
+    const g = group('G', [rect('a', 0, 0, 5, 5, { fill: solid(1, 1, 1) })], { style: { filters: [blur()] } });
+    expect((only(parseAgc(agcDoc([g]))).node as IrGroup).blur).toBe(5);
+    const t = text('T', 'abc', { style: { filters: [blur()] } });
+    expect((only(parseAgc(agcDoc([t]))).node as IrText).blur).toBe(5);
+  });
+
+  it('is nothing for a disabled blur or an amount of zero, and combines two as one Gaussian', () => {
+    expect((parsed([blur({ visible: false })]).node as IrShape).blur).toBeUndefined();
+    expect((parsed([blur({}, { blurAmount: 0 })]).node as IrShape).blur).toBeUndefined();
+    expect(codes(parsed([blur({ visible: false }), blur({}, { blurAmount: 0 })]))).toEqual([]);
+    // two Gaussians add in variance: sqrt(3^2 + 4^2) = 5
+    expect(
+      (parsed([blur({}, { blurAmount: 3 }), blur({}, { blurAmount: 4 })]).node as IrShape).blur,
+    ).toBeCloseTo(5, 6);
+  });
+
+  it('reports a background blur, which needs the pixels behind the shape and cannot be drawn', () => {
+    const r = parsed([blur({}, { backgroundEffect: true })]);
+    expect((r.node as IrShape).blur).toBeUndefined();
+    expect(codes(r)).toEqual(['unsupported-style:filters:uxdesign#blur-background']);
+  });
+
+  it('reports a blur it cannot read or one that is not global', () => {
+    expect(codes(parsed([{ type: 'uxdesign#blur', global: true, params: {} }]))).toEqual([
+      'unsupported-style:filters',
+    ]);
+    expect(codes(parsed([blur({ global: false })]))).toEqual([
+      'unsupported-style:filters:uxdesign#blur-local',
+    ]);
+    expect(codes(parsed([blur({}, { blurAmount: -2 })]))).toEqual(['unsupported-style:filters']);
+  });
+
+  it('lives next to a drop shadow', () => {
+    const shadow = {
+      type: 'dropShadow',
+      global: true,
+      params: { dropShadows: [{ dx: 0, dy: 2, r: 2, color: { mode: 'RGB', value: { r: 0, g: 0, b: 0 } } }] },
+    };
+    const r = parsed([shadow, blur()]);
+    expect((r.node as IrShape).shadows).toHaveLength(1);
+    expect((r.node as IrShape).blur).toBe(5);
+    expect(codes(r)).toEqual([]);
+  });
+});

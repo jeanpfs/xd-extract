@@ -52,7 +52,9 @@ Every extraction records warnings in the report (`<file>.svg.report.json`) and p
 | `text-script-unsupported:<v>` | no | Superscript or subscript text is drawn at normal size and position |
 | `unsupported-stroke:text` | yes | A stroke on text is not converted |
 | `skipped-text` | no | A text node without a readable layout is skipped |
-| `unsupported-style:filters:<type>` | no | A filter other than a drop shadow (`innerShadow`, blur, ...) is not converted |
+| `unsupported-style:filters:uxdesign#blur-background` | no | A background blur needs the pixels behind the shape; not drawn |
+| `unsupported-style:filters:uxdesign#blur-local` | no | A blur without `global: true` is not converted |
+| `unsupported-style:filters:<type>` | no | A filter other than a drop shadow or object blur (`innerShadow`, ...) is not converted |
 | `unsupported-style:filters:dropShadow-local` | no | A drop shadow without `global: true` (never observed) is not converted |
 | `unsupported-style:filters` | no | A `style.filters` entry was malformed or used a colour mode other than RGB |
 | `unsupported-style:clipPath` | no | Repeat-grid mask is not converted |
@@ -109,4 +111,4 @@ Warnings: `text-not-rasterized` (fonts are never loaded during validation, so te
 - **Empty or half-empty SVG:** run `xd validate`; `render-empty` or `edge-band-drift` points at the frame. Open an issue with the redacted document.
 - **Text looks different or is missing:** text is live `<text>` and needs its font on the viewer's machine (`text-font-not-embedded`). The width of left-aligned text is estimated for the frame (`text-bbox-approximate`); if the frame is off, crop with a different node.
 - **An image is missing from the SVG (`unsupported-fill:pattern`):** the bytes were not in the document. A `.xd` carries them under `resources/<id>`; a share link serves them as separate components, and one that could not be fetched is skipped. Retry, or open the `.xd` file.
-- **Output differs in blur, angular gradients, moved images:** not converted yet; see the warnings in the report.
+- **Output differs in background blur, angular gradients, moved images:** not converted yet; see the warnings in the report.

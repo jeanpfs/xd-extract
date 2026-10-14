@@ -95,6 +95,8 @@ export interface IrShape {
   shadows: Shadow[];
   /** CSS mix-blend-mode; undefined: normal. */
   blend?: string;
+  /** Object blur: the standard deviation of a Gaussian, in the node's units. */
+  blur?: number;
 }
 
 export interface IrClipShape {
@@ -112,6 +114,8 @@ export interface IrGroup {
   shadows: Shadow[];
   /** CSS mix-blend-mode; undefined: normal. */
   blend?: string;
+  /** Object blur: the standard deviation of a Gaussian, in the node's units. */
+  blur?: number;
   clip: { maskName: string; shapes: IrClipShape[] } | null;
   children: IrNode[];
 }
@@ -149,6 +153,8 @@ export interface IrText {
   shadows: Shadow[];
   /** CSS mix-blend-mode; undefined: normal. */
   blend?: string;
+  /** Object blur: the standard deviation of a Gaussian, in the node's units. */
+  blur?: number;
   align: 'left' | 'center' | 'right';
   lines: IrTextLine[];
   /** Local-space corners of the (partly estimated) text box, for the frame. */

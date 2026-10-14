@@ -2,7 +2,7 @@ import { genericFamily, quoteFamily } from './font';
 import { boxOf, collectPaintFacts, type FrameResult } from './frame';
 import type { Geom, Gradient, ImageFill, IrGroup, IrNode, IrShape, IrText, Paint, Stroke } from './ir';
 import { IDENTITY, isIdentity, type Matrix, matrixAttr, mul, round, translate } from './matrix';
-import { shadowBox } from './shadow';
+import { effectsBox } from './shadow';
 
 export interface Snap {
   clip: string;
@@ -235,13 +235,18 @@ export function emitSvg(root: IrNode, frameResult: FrameResult): EmitResult {
       : pair;
   };
 
-  /** Registers the shadow filter of a node and returns its `url(#id)`, or undefined when nothing paints. */
+  /** Registers the effects filter (object blur, shadows) of a node and returns its `url(#id)`, or undefined. */
   const shadowRef = (n: IrNode): string | undefined => {
-    if (!n.shadows.length) return undefined;
+    if (!n.shadows.length && !n.blur) return undefined;
     const local = collectPaintFacts(n, false).content;
     if (!local) return undefined;
-    // the region must not cut the tail: 3 sigma, whatever is visible
-    const r = shadowBox(local, n.shadows, (s) => s.r * 1.5);
+    // the region must not cut a tail: 3 sigma, whatever is visible
+    const r = effectsBox(
+      local,
+      n,
+      (s) => s.r * 1.5,
+      (sigma) => sigma * 3,
+    );
     const region = {
       x: round(r.x0 - 1),
       y: round(r.y0 - 1),
@@ -251,9 +256,15 @@ export function emitSvg(root: IrNode, frameResult: FrameResult): EmitResult {
     const id = `shadow-${++shadowSeq}`;
     const fx: string[] = [];
     const merge: string[] = [];
+    // the shadows are those of the blurred object, so the blur comes first
+    let object = 'SourceGraphic';
+    if (n.blur) {
+      fx.push(el('feGaussianBlur', { in: 'SourceGraphic', stdDeviation: round(n.blur), result: 'blur' }));
+      object = 'blur';
+    }
     n.shadows.forEach((s, i) => {
       const k = i + 1;
-      let src = 'SourceAlpha';
+      let src = n.blur ? 'blur' : 'SourceAlpha';
       if (s.r > 0) {
         fx.push(el('feGaussianBlur', { in: src, stdDeviation: round(s.r / 2), result: `blur${k}` }));
         src = `blur${k}`;
@@ -265,8 +276,10 @@ export function emitSvg(root: IrNode, frameResult: FrameResult): EmitResult {
       fx.push(el('feComposite', { in: `flood${k}`, in2: `off${k}`, operator: 'in', result: `shadow${k}` }));
       merge.push(el('feMergeNode', { in: `shadow${k}` }));
     });
-    merge.push(el('feMergeNode', { in: 'SourceGraphic' }));
-    fx.push(el('feMerge', {}, merge.join('')));
+    if (n.shadows.length) {
+      merge.push(el('feMergeNode', { in: object }));
+      fx.push(el('feMerge', {}, merge.join('')));
+    }
     defs.push(
       el(
         'filter',

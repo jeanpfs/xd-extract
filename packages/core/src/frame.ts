@@ -1,7 +1,7 @@
 import { XdError } from './errors';
 import type { IrNode, Point } from './ir';
 import { apply, IDENTITY, type Matrix, mul } from './matrix';
-import { shadowBox, visibleReach } from './shadow';
+import { effectsBox, visibleBlurReach, visibleReach } from './shadow';
 
 export interface Box {
   x0: number;
@@ -53,12 +53,13 @@ export interface PaintFacts {
 export function collectPaintFacts(root: IrNode, rootShadows = true): PaintFacts {
   const facts: PaintFacts = { plate: null, content: null, fills: new Map(), shapes: 0 };
   // The node being measured as `root` with rootShadows=false is the one whose shadows we compute.
-  const ownShadows = (n: IrNode): boolean => n.shadows.length > 0 && !(n === root && !rootShadows);
+  const ownShadows = (n: IrNode): boolean =>
+    (n.shadows.length > 0 || !!n.blur) && !(n === root && !rootShadows);
   // The node's own shadows are what this computes, so they are excluded from its source box.
   const shadowWorld = (n: IrNode, world: Matrix): Box | null => {
     const local = collectPaintFacts(n, false).content;
     if (!local) return null;
-    const s = shadowBox(local, n.shadows, visibleReach);
+    const s = effectsBox(local, n, visibleReach, visibleBlurReach);
     const corners: Point[] = [
       [s.x0, s.y0],
       [s.x1, s.y0],

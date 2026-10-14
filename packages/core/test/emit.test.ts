@@ -18,7 +18,7 @@ import { describe, expect, it } from 'vitest';
 import { convertRoot } from '../src/convert';
 import { parseAgc } from '../src/parse';
 import { rasterize } from '../src/raster';
-import { visibleReach } from '../src/shadow';
+import { visibleBlurReach, visibleReach } from '../src/shadow';
 import { validateRaster, validateStatic } from '../src/validate';
 
 const convert = (...roots: Parameters<typeof agcDoc>[0]) => {
@@ -752,5 +752,94 @@ describe('image fills', () => {
   it('is valid SVG: the reference resolves', () => {
     const { svg } = withImages(group('Root', [pic(patternFill('u1'))]));
     expect(validateStatic(svg)).toEqual([]);
+  });
+});
+
+describe('object blur', () => {
+  const blur = (amount: number) => ({
+    type: 'uxdesign#blur',
+    global: true,
+    params: { blurAmount: amount, brightnessAmount: 0, fillOpacity: 0, backgroundEffect: false },
+  });
+  const alphaAt = (svg: string, w: number, x: number, y: number) =>
+    rasterize(svg, w).alpha[y * w + x] as number;
+  // a filled square inside a larger plate would hide the blur's growth, so the square is its own plate
+  const square = (extra = {}) => rect('sq', 20, 20, 40, 40, { fill: solid(255, 0, 0), ...extra });
+
+  it('blurs the object with a Gaussian of the stated amount', () => {
+    const { svg } = convert(group('Root', [square({ filters: [blur(6)] })]));
+    expect(svg).toMatch(/<filter id="shadow-1" filterUnits="userSpaceOnUse"[^>]*>/);
+    expect(svg).toContain('<feGaussianBlur in="SourceGraphic" stdDeviation="6"');
+    expect(svg).not.toContain('feMerge');
+    expect(svg).toMatch(/<g filter="url\(#shadow-1\)"><rect/);
+  });
+
+  it('really softens the edge: half-painted on the edge, fading outside, nothing far away', () => {
+    const sharp = convert(group('Root', [square()])).svg;
+    const soft = convert(group('Root', [square({ filters: [blur(6)] })]));
+    const f = soft.report.frame;
+    // the square is 20..60; the frame has grown around it
+    expect(f.x).toBeLessThan(20);
+    expect(f.x + f.w).toBeGreaterThan(60);
+    const scale = 1;
+    const at = (svg: string, x: number, y: number, fx: number, fy: number) =>
+      alphaAt(svg, Math.round(soft.report.frame.w * scale), Math.round(x - fx), Math.round(y - fy));
+    expect(alphaAt(sharp, 40, 20, 20)).toBe(255);
+    const edge = at(soft.svg, 20, 40, f.x, f.y);
+    expect(edge).toBeGreaterThan(90);
+    expect(edge).toBeLessThan(170);
+    expect(at(soft.svg, 40, 40, f.x, f.y)).toBe(255);
+  });
+
+  it('grows a plate by the visible reach of its own blur, and a content frame too', () => {
+    const reach = visibleBlurReach(6);
+    expect(reach).toBeGreaterThan(8);
+    expect(reach).toBeLessThan(12);
+    const plate = convert(group('Root', [square({ filters: [blur(6)] })])).report;
+    expect(plate.rule).toBe('plate');
+    expect(plate.frame.x).toBeCloseTo(20 - reach, 2);
+    expect(plate.frame.w).toBeCloseTo(40 + 2 * reach, 2);
+    const inherited = group('Root', [rect('sq', 20, 20, 40, 40, { filters: [blur(6)] })], {
+      style: { fill: solid(255, 0, 0) },
+    });
+    expect(convert(inherited).report.frame.x).toBeCloseTo(20 - reach, 2);
+  });
+
+  it('makes the filter region wide enough for three sigma', () => {
+    const { svg } = convert(group('Root', [square({ filters: [blur(6)] })]));
+    const f = svg.match(/<filter [^>]*x="(-?[\d.]+)" y="(-?[\d.]+)" width="([\d.]+)" height="([\d.]+)"/)!;
+    const [x, , w] = f.slice(1).map(Number) as [number, number, number];
+    expect(x).toBeLessThanOrEqual(20 - 18);
+    expect(x + w).toBeGreaterThanOrEqual(60 + 18);
+  });
+
+  it('takes the shadow of the blurred object, under it, in one filter', () => {
+    const shadow = {
+      type: 'dropShadow',
+      global: true,
+      params: {
+        dropShadows: [
+          { dx: 0, dy: 4, r: 2, color: { mode: 'RGB', value: { r: 0, g: 0, b: 0 }, alpha: 0.5 } },
+        ],
+      },
+    };
+    const { svg } = convert(group('Root', [square({ filters: [shadow, blur(6)] })]));
+    expect(svg.match(/<filter /g)).toHaveLength(1);
+    expect(svg).toContain('<feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur"/>');
+    expect(svg).toContain('<feGaussianBlur in="blur" stdDeviation="1" result="blur1"/>');
+    expect(svg).toContain('<feMergeNode in="blur"/></feMerge>');
+  });
+
+  it('is valid SVG', () => {
+    const { svg } = convert(group('Root', [square({ filters: [blur(6)] })]));
+    expect(validateStatic(svg)).toEqual([]);
+  });
+});
+
+describe('visibleBlurReach', () => {
+  it('is where a Gaussian step edge drops below the visible alpha, about 1.5 sigma', () => {
+    expect(visibleBlurReach(0)).toBe(0);
+    expect(visibleBlurReach(10)).toBeCloseTo(15.3, 0);
+    expect(visibleBlurReach(20)).toBeCloseTo(2 * visibleBlurReach(10), 6);
   });
 });
