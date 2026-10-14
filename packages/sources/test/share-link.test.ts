@@ -2,7 +2,7 @@ import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseAgc } from '@xd-extract/core';
-import { agcDoc, buildManifest, group, rect, solid } from '@xd-extract/testkit';
+import { agcDoc, buildManifest, group, patternFill, rect, solid, stripesPng } from '@xd-extract/testkit';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createRecorder, createReplayFetch, extractManifestUrl, loadShareLink, redactTokens } from '../src';
 import { BASE, componentUrl, fakeFetch, manifestUrl, pageHtml, pageUrl, TOKEN } from './helpers';
@@ -57,6 +57,65 @@ describe('resources component', () => {
     const doc = await loadShareLink(pageUrl, { fetch: fakeFetch(happyRoutes(), calls) });
     expect(doc.resources).toBeUndefined();
     expect(calls.some((c) => c.includes('cmp-resources'))).toBe(false);
+  });
+});
+
+describe('image components', () => {
+  const png = stripesPng();
+  const bytes = new Uint8Array(Buffer.from(png, 'base64'));
+  const pageWithImage = agcDoc([group('Photo', [rect('r', 0, 0, 40, 40, { fill: patternFill('u1') })])]);
+  type Route = { status?: number; body: unknown; bytes?: Uint8Array };
+  const withImages = (images = [{ uid: 'u1', version: '2' }], extra: Record<string, Route> = {}) => ({
+    ...happyRoutes(),
+    [manifestUrl]: { body: buildManifest([{ id: 'a1', name: 'Splash', version: '1' }], {}, { images }) },
+    [componentUrl('cmp-a1', '1')]: { body: pageWithImage },
+    [componentUrl('img-u1', '2')]: { body: '', bytes },
+    ...extra,
+  });
+
+  it('fetches the bytes of every image a fill uses, as base64', async () => {
+    const doc = await loadShareLink(pageUrl, { fetch: fakeFetch(withImages()) });
+    expect(doc.images).toEqual({ u1: png });
+  });
+
+  it('fetches nothing for an image no fill uses', async () => {
+    const calls: string[] = [];
+    const routes = withImages([
+      { uid: 'u1', version: '2' },
+      { uid: 'orphan', version: '2' },
+    ]);
+    await loadShareLink(pageUrl, { fetch: fakeFetch(routes, calls) });
+    expect(calls.some((c) => c.includes('img-orphan'))).toBe(false);
+  });
+
+  it('does not fail the load when an image cannot be fetched, and a refused token is TokenExpired', async () => {
+    const gone = withImages([{ uid: 'u1', version: '2' }], {
+      [componentUrl('img-u1', '2')]: { status: 404, body: '' },
+    });
+    const doc = await loadShareLink(pageUrl, { fetch: fakeFetch(gone) });
+    expect(doc.images).toBeUndefined();
+    expect(doc.artboards).toHaveLength(2);
+    const refused = withImages([{ uid: 'u1', version: '2' }], {
+      [componentUrl('img-u1', '2')]: { status: 403, body: '' },
+    });
+    await expect(loadShareLink(pageUrl, { fetch: fakeFetch(refused) })).rejects.toMatchObject({
+      code: 'TokenExpired',
+    });
+  });
+
+  it('records an image as base64 and replays it byte for byte', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'xd-extract-img-'));
+    try {
+      const live = await loadShareLink(pageUrl, {
+        fetch: fakeFetch(withImages()),
+        recorder: createRecorder(dir),
+      });
+      const replayed = await loadShareLink(pageUrl, { fetch: createReplayFetch(dir) });
+      expect(replayed.images).toEqual({ u1: png });
+      expect(replayed).toEqual(live);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
 

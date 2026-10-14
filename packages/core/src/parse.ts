@@ -4,6 +4,7 @@ import type {
   AgcGradientResource,
   AgcNode,
   AgcPaint,
+  AgcPattern,
   AgcShape,
   AgcStyle,
   AgcTextRange,
@@ -12,6 +13,7 @@ import type {
 import { type AgcColor, solidCss } from './color';
 import { XdError } from './errors';
 import { fontStyleOf } from './font';
+import { base64ByteLength, DEFAULT_MAX_EMBED_BYTES, sniffImage, type XdImages } from './image';
 import type {
   Geom,
   GradientStop,
@@ -33,9 +35,22 @@ import { type Warning, WarningCollector } from './warnings';
 
 /** Collects warnings for one root and carries the shared gradients its fills may refer to. */
 class Scope extends WarningCollector {
-  constructor(readonly gradients: Record<string, AgcGradientResource> = {}) {
+  constructor(
+    readonly gradients: Record<string, AgcGradientResource> = {},
+    readonly images: XdImages = {},
+    readonly maxEmbedBytes: number = DEFAULT_MAX_EMBED_BYTES,
+  ) {
     super();
   }
+}
+
+/** What a parse can look things up in: other nodes (symbols), shared gradients, image bytes. */
+export interface ParseOptions {
+  index?: SyncIndex;
+  gradients?: Record<string, AgcGradientResource>;
+  images?: XdImages;
+  /** Largest image embedded in an SVG, in bytes (default 2 MiB). */
+  maxEmbedBytes?: number;
 }
 
 export interface ParsedRoot {
@@ -74,9 +89,51 @@ function readPaint(p: AgcPaint | undefined, where: 'fill' | 'stroke', w: Scope, 
     return { kind: 'solid', css: solidCss(p.color) };
   }
   if (p.type === 'gradient') return readGradient(p.gradient, where, w, name);
+  if (p.type === 'pattern') return readPattern(p.pattern, where, w, name);
   const reason = p.type ?? 'unknown';
   w.add(`unsupported-${where}:${reason}`, `${where} of type "${reason}" is not converted yet`, name);
   return { kind: 'unsupported', reason };
+}
+
+/** An image fill. The bytes come from the document (`xd` files carry them, share links serve them). */
+function readPattern(p: AgcPattern | undefined, where: 'fill' | 'stroke', w: Scope, name: string): Paint {
+  const bad = (reason: string, message: string): Paint => {
+    w.add(`unsupported-${where}:${reason}`, message, name);
+    return { kind: 'unsupported', reason };
+  };
+  if (where === 'stroke') return bad('pattern', 'an image on a stroke is not converted');
+  const ux = p?.meta?.ux;
+  const uid = ux?.uid;
+  if (!p || typeof uid !== 'string') return bad('pattern', 'image fill without an image id');
+  const base64 = w.images[uid];
+  if (base64 === undefined)
+    return bad('pattern', 'the image bytes are not in the document (not read, or not fetched)');
+  const bytes = base64ByteLength(base64);
+  if (bytes > w.maxEmbedBytes) {
+    return bad(
+      'pattern-too-large',
+      `the image is ${bytes} bytes; the embed limit is ${w.maxEmbedBytes} (--max-embed-bytes)`,
+    );
+  }
+  const mime = sniffImage(base64);
+  if (!mime) return bad('pattern-format', 'the image is not a PNG, JPEG, GIF or WebP');
+  const { width, height } = p;
+  if (typeof width !== 'number' || typeof height !== 'number' || !(width > 0) || !(height > 0)) {
+    return bad('pattern', 'image fill without a size');
+  }
+  // `cover` is XD's default fill (scaled to cover the shape, cropped); `fill` stretches.
+  const behavior = ux?.scaleBehavior ?? 'cover';
+  if (behavior !== 'cover' && behavior !== 'fill') {
+    w.add(`pattern-scale-unknown:${behavior}`, `image scale behaviour "${behavior}" is drawn as cover`, name);
+  }
+  if ((ux?.scale !== undefined && ux.scale !== 1) || ux?.offsetX || ux?.offsetY) {
+    w.add(
+      'pattern-offset-ignored',
+      'a moved or zoomed image fill (offset, scale) is drawn centred at the default scale',
+      name,
+    );
+  }
+  return { kind: 'image', uid, mime, base64, width, height, fit: behavior === 'fill' ? 'stretch' : 'cover' };
 }
 
 /**
@@ -537,8 +594,9 @@ function parseText(n: AgcNode, w: Scope): IrText | null {
 
   // Style per character range. Without ranged styles, the node's own font and fill apply to everything.
   const nodeFill = readPaint(st.fill, 'fill', w, name);
-  if (nodeFill?.kind === 'gradient') {
-    w.add('unsupported-fill:gradient', 'a gradient fill on text is not converted', name);
+  if (nodeFill?.kind === 'gradient' || nodeFill?.kind === 'image') {
+    const what = nodeFill.kind === 'image' ? 'pattern' : 'gradient';
+    w.add(`unsupported-fill:${what}`, `a ${what} fill on text is not converted`, name);
   }
   const nodeFillCss = nodeFill?.kind === 'solid' ? nodeFill.css : null;
   const ranges: (AgcTextRange & { end: number })[] = [];
@@ -724,18 +782,15 @@ function parseNode(n: AgcNode, inh: Inherited, w: Scope, isRoot: boolean): IrNod
 }
 
 /** Parses one AGC document into one IR root per top-level node, each with its own warnings. */
-export function parseAgc(
-  agc: AgcDocument,
-  index: SyncIndex = buildSyncIndex([agc]),
-  gradients: Record<string, AgcGradientResource> = {},
-): ParsedRoot[] {
+export function parseAgc(agc: AgcDocument, opts: ParseOptions = {}): ParsedRoot[] {
+  const index = opts.index ?? buildSyncIndex([agc]);
   if (!agc || !Array.isArray(agc.children))
     throw new XdError('InvalidAgc', 'AGC document has no children array');
   const first = agc.children[0];
   const rawRoots = first?.type === 'artboard' ? (first.artboard?.children ?? []) : agc.children;
   const out: ParsedRoot[] = [];
   for (const raw of rawRoots) {
-    const w = new Scope(gradients);
+    const w = new Scope(opts.gradients, opts.images, opts.maxEmbedBytes);
     if (agc.version && !/^1\./.test(agc.version)) {
       w.add(
         `agc-version-untested:${agc.version}`,

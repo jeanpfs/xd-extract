@@ -1,12 +1,16 @@
 import {
   type AgcDocument,
+  collectPatternUids,
+  parseImages,
   parseManifest,
   parseResources,
   type XdArtboard,
   type XdDocument,
   XdError,
+  type XdImages,
 } from '@xd-extract/core';
 import { type FetchLike, type Recorder, redactTokens } from './recording';
+import { MAX_LOAD_IMAGE_BYTES } from './xd-file';
 
 export interface ShareLinkOptions {
   fetch?: FetchLike;
@@ -17,6 +21,31 @@ const MANIFEST_URL =
   /https:\/\/cdn-sharing\.adobecc\.com\/content\/storage\/id\/[^"'\s<>]*component_id=manifest[^"'\s<>]*/;
 
 /** The viewer embeds the manifest URL, HTML-escaped, in the static page. */
+/** Like `get`, for bytes: images are fetched and recorded as base64. Over the size cap it reads nothing. */
+async function getBinary(
+  f: FetchLike,
+  recorder: Recorder | undefined,
+  url: string,
+): Promise<{ status: number; base64?: string }> {
+  let res: Response;
+  try {
+    res = await f(url, { redirect: 'follow' });
+  } catch {
+    return { status: 0 };
+  }
+  if (res.status !== 200) return { status: res.status };
+  const length = Number(res.headers.get('content-length') ?? 0);
+  if (length > MAX_LOAD_IMAGE_BYTES) {
+    await res.body?.cancel();
+    return { status: 200 };
+  }
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.length > MAX_LOAD_IMAGE_BYTES) return { status: 200 };
+  const base64 = Buffer.from(bytes).toString('base64');
+  recorder?.record(url, 200, base64, true);
+  return { status: 200, base64 };
+}
+
 export function extractManifestUrl(html: string): string | null {
   const m = MANIFEST_URL.exec(html);
   return m ? m[0].replaceAll('&amp;', '&') : null;
@@ -150,7 +179,33 @@ export async function loadFromManifestUrl(
       }
     }
   }
-  return { artboards, ...(resources ? { resources } : {}), source: { kind: 'share-link', ref } };
+  // Images: only the ones the artwork uses. A miss leaves that fill reported, it does not fail the load.
+  const listedImages = parseImages(manifest);
+  const images: XdImages = {};
+  for (const uid of collectPatternUids([...artboards.map((a) => a.agc), ...(resources ? [resources] : [])])) {
+    const comp = listedImages.get(uid);
+    if (!comp) continue;
+    const revs = [
+      ...new Set([comp.version, learned, manifestRev, '1', '0'].filter((v): v is string => v !== undefined)),
+    ];
+    for (const rev of revs) {
+      const u = `${base};revision=${rev}?component_id=${comp.componentId}&api_key=${apiKey}&access_token=${token}`;
+      const r = await getBinary(f, opts.recorder, u);
+      if (r.status === 401 || r.status === 403) {
+        throw new XdError('TokenExpired', `the image request was refused (HTTP ${r.status})`);
+      }
+      if (r.status === 200) {
+        if (r.base64) images[uid] = r.base64;
+        break;
+      }
+    }
+  }
+  return {
+    artboards,
+    ...(resources ? { resources } : {}),
+    ...(Object.keys(images).length ? { images } : {}),
+    source: { kind: 'share-link', ref },
+  };
 }
 
 export async function loadShareLink(url: string, opts: ShareLinkOptions = {}): Promise<XdDocument> {

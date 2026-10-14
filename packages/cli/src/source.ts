@@ -12,6 +12,16 @@ export interface SourceFlags {
   record?: string | undefined;
 }
 
+/** `--max-embed-bytes`: the largest image embedded in an SVG. Undefined keeps the default (2 MiB). */
+export function embedLimit(value: string | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 0) {
+    throw new XdError('Usage', `--max-embed-bytes needs a whole number of bytes, got "${value}"`);
+  }
+  return n;
+}
+
 export async function openSource(arg: string | undefined, flags: SourceFlags): Promise<XdDocument> {
   if (!arg) throw new XdError('Usage', 'missing <source> (share link, .xd file or document.json)');
   if (/^https?:\/\//i.test(arg)) {

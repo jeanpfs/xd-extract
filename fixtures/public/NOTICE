@@ -11,7 +11,7 @@ files are pinned by commit and sha256 in scripts/fixtures.mjs; rebuild with `pnp
               brand drawn by Adobe for that example, and its name and every other text are removed)
 
 The licences cover the files, not any third-party marks a design may contain; each file was chosen
-because it is a generic template or a synthetic test document, and every node was rendered and checked
+because it is a generic template or a synthetic test document (tests-suite also keeps Adobe's four numbered test pictures; its fifth picture, an icon from the commercial Glyphicons Pro set, is left out), and every node was rendered and checked
 before it was added. A second file from the first project (multi.xd) is deliberately not redistributed.
 
 ---- MIT License: xd2svg ----

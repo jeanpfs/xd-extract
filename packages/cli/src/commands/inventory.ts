@@ -12,7 +12,7 @@ import {
   XdError,
 } from '@xd-extract/core';
 import type { Io } from '../io';
-import { openSource } from '../source';
+import { embedLimit, openSource } from '../source';
 
 const PREVIEW_LIMIT = 60;
 
@@ -29,10 +29,12 @@ export async function inventoryCommand(args: string[], io: Io): Promise<number> 
       preview: { type: 'string' },
       browser: { type: 'boolean' },
       record: { type: 'string' },
+      'max-embed-bytes': { type: 'string' },
     },
   });
   const doc = await openSource(positionals[0], values);
-  let parsed = parseDocument(doc);
+  const maxEmbedBytes = embedLimit(values['max-embed-bytes']);
+  let parsed = parseDocument(doc, maxEmbedBytes === undefined ? {} : { maxEmbedBytes });
   if (values.artboard !== undefined) {
     parsed = selectArtboards(parsed, values.artboard);
     if (!parsed.length) {

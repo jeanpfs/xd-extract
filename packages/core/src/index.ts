@@ -5,6 +5,7 @@ export * from './document';
 export * from './emit';
 export * from './errors';
 export * from './frame';
+export * from './image';
 export * from './inventory';
 export * from './ir';
 export * from './manifest';

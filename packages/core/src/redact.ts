@@ -22,16 +22,24 @@ const KEEP_KEYS = new Set([
   'textScript',
   'blendMode',
   'units',
+  'scaleBehavior',
 ]);
 // `syncSourceGuid` names another node's `id`, so both must map to the same token
-const ID_KEYS = new Set(['id', 'ref', 'symbolId', 'syncSourceGuid', 'guid']);
+const ID_KEYS = new Set(['id', 'ref', 'symbolId', 'syncSourceGuid', 'guid', 'uid']);
 
 /**
  * Anonymises a document for use as a public fixture. Removes names, ids, text, fonts and every
  * string it does not recognise. Geometry (numbers and path data) is kept on purpose, so the
  * author must still confirm the artwork itself is publishable.
  */
-export function redactDocument(doc: XdDocument): XdDocument {
+export interface RedactOptions {
+  /** Keep the pictures (base64) under anonymised ids. Only for pictures the caller may publish. */
+  keepImages?: boolean;
+  /** With keepImages: pictures to drop anyway, by their original `uid`. */
+  dropImages?: string[];
+}
+
+export function redactDocument(doc: XdDocument, opts: RedactOptions = {}): XdDocument {
   const ids = new Map<string, string>();
   const idFor = (v: string) => {
     let r = ids.get(v);
@@ -84,9 +92,17 @@ export function redactDocument(doc: XdDocument): XdDocument {
       ) as AgcDocument)
     : undefined;
 
+  const kept = opts.keepImages
+    ? Object.entries(doc.images ?? {})
+        .filter(([uid]) => !opts.dropImages?.includes(uid))
+        .map(([uid, b64]) => [idFor(uid), b64] as const)
+    : [];
+
   return {
     source: { kind: 'fixture', ref: 'redacted' },
     ...(resources ? { resources } : {}),
+    // Pictures are other people's work more often than not: kept only when the caller says they may be published.
+    ...(kept.length ? { images: Object.fromEntries(kept) } : {}),
     artboards: doc.artboards.map((a, i) => ({
       id: idFor(a.id),
       name: `artboard-${i + 1}`,

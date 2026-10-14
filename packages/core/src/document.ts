@@ -1,6 +1,7 @@
 import type { AgcDocument } from './agc';
 import type { SourceInfo } from './convert';
-import { type ParsedRoot, parseAgc } from './parse';
+import type { XdImages } from './image';
+import { type ParsedRoot, type ParseOptions, parseAgc } from './parse';
 import { buildSyncIndex } from './sync';
 
 export interface XdArtboard {
@@ -15,6 +16,8 @@ export interface XdDocument {
   artboards: XdArtboard[];
   /** The document-wide resources AGC: symbol masters (`resources.meta.ux.symbols`) and gradients. */
   resources?: AgcDocument;
+  /** Image bytes (base64) by the `uid` of the pattern fills that use them. */
+  images?: XdImages;
   source: SourceInfo;
 }
 
@@ -25,7 +28,7 @@ export interface ParsedArtboard {
   roots: ParsedRoot[];
 }
 
-export function parseDocument(doc: XdDocument): ParsedArtboard[] {
+export function parseDocument(doc: XdDocument, opts: ParseOptions = {}): ParsedArtboard[] {
   // a symbol instance on one artboard takes its content from a master that may be on another
   const index = buildSyncIndex(
     doc.artboards.map((a) => a.agc),
@@ -36,6 +39,6 @@ export function parseDocument(doc: XdDocument): ParsedArtboard[] {
     id: a.id,
     name: a.name,
     aliases: a.aliases ?? [],
-    roots: parseAgc(a.agc, index, gradients),
+    roots: parseAgc(a.agc, { index, gradients, images: doc.images ?? {}, ...opts }),
   }));
 }

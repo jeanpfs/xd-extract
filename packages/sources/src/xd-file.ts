@@ -1,9 +1,20 @@
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
-import { type AgcDocument, parseManifest, type XdArtboard, type XdDocument, XdError } from '@xd-extract/core';
+import {
+  type AgcDocument,
+  collectPatternUids,
+  parseManifest,
+  type XdArtboard,
+  type XdDocument,
+  XdError,
+  type XdImages,
+} from '@xd-extract/core';
 import { unzipSync } from 'fflate';
 
 const text = (b: Uint8Array) => new TextDecoder().decode(b);
+
+/** Larger images are not read at all: no SVG would embed them, and they are the bulk of an archive. */
+export const MAX_LOAD_IMAGE_BYTES = 32 * 1024 * 1024;
 
 /** Only inflate what we read: `.xd` files carry large bitmaps under resources/. */
 const wanted = (name: string) =>
@@ -59,7 +70,29 @@ export function readXdBytes(bytes: Uint8Array, ref: string): XdDocument {
       throw new XdError('InvalidAgc', `${ref}: the resources AGC is not valid JSON`);
     }
   }
-  return { artboards, ...(resources ? { resources } : {}), source: { kind: 'xd-file', ref } };
+  // Image bytes are stored as resources/<uid>; only the ones the artwork uses are inflated.
+  const uids = collectPatternUids([...artboards.map((a) => a.agc), ...(resources ? [resources] : [])]);
+  let images: XdImages | undefined;
+  if (uids.size) {
+    const prefix = 'resources/';
+    const found = unzipSync(bytes, {
+      filter: (f) =>
+        f.name.startsWith(prefix) &&
+        uids.has(f.name.slice(prefix.length)) &&
+        f.originalSize <= MAX_LOAD_IMAGE_BYTES,
+    });
+    const entries = Object.entries(found).map(([name, data]) => [
+      name.slice(prefix.length),
+      Buffer.from(data).toString('base64'),
+    ]);
+    if (entries.length) images = Object.fromEntries(entries);
+  }
+  return {
+    artboards,
+    ...(resources ? { resources } : {}),
+    ...(images ? { images } : {}),
+    source: { kind: 'xd-file', ref },
+  };
 }
 
 export async function loadXdFile(path: string): Promise<XdDocument> {

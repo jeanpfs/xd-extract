@@ -29,7 +29,12 @@ Every extraction records warnings in the report (`<file>.svg.report.json`) and p
 
 | Code | Fails `validate` | Meaning |
 |---|---|---|
-| `unsupported-fill:<type>` | yes | Fill is not converted: `pattern` (images), a `gradient` that is malformed, has no stops or whose shared `ref` is missing from the resources document, or a gradient on text |
+| `unsupported-fill:pattern` | yes | An image fill whose picture is not available: not in the `.xd`, not fetched from the link (a miss is silent at load time), no image id or no size, or on a stroke or text |
+| `unsupported-fill:pattern-too-large` | yes | The picture is over `--max-embed-bytes` (default 2 MiB); raise the limit to embed it |
+| `unsupported-fill:pattern-format` | yes | The bytes are not a PNG, JPEG, GIF or WebP (checked by content, not by name) |
+| `pattern-scale-unknown:<v>` | no | An image scale behaviour other than `cover` and `fill`; drawn as cover |
+| `pattern-offset-ignored` | no | A moved or zoomed image fill (`offsetX`, `offsetY`, `scale`) is drawn centred at the default scale |
+| `unsupported-fill:<type>` | yes | Fill is not converted: a `gradient` that is malformed, has no stops or whose shared `ref` is missing from the resources document, or a gradient on text |
 | `unsupported-fill:gradient-<type>` | yes | A gradient type SVG cannot draw (`angular`) |
 | `gradient-degenerate-bbox` | no | A bounding-box gradient on a shape with no width or height (a straight line): SVG would draw nothing, so its first stop colour is used |
 | `unsupported-fill:color-mode-<mode>` | yes | Solid fill in a colour mode other than RGB |
@@ -103,4 +108,5 @@ Warnings: `text-not-rasterized` (fonts are never loaded during validation, so te
 - **`TokenExpired`:** tokens in share-link manifests are short-lived. Re-run; do not cache recordings.
 - **Empty or half-empty SVG:** run `xd validate`; `render-empty` or `edge-band-drift` points at the frame. Open an issue with the redacted document.
 - **Text looks different or is missing:** text is live `<text>` and needs its font on the viewer's machine (`text-font-not-embedded`). The width of left-aligned text is estimated for the frame (`text-bbox-approximate`); if the frame is off, crop with a different node.
-- **Output differs in blur, angular gradients, images:** not converted yet; see the warnings in the report.
+- **An image is missing from the SVG (`unsupported-fill:pattern`):** the bytes were not in the document. A `.xd` carries them under `resources/<id>`; a share link serves them as separate components, and one that could not be fetched is skipped. Retry, or open the `.xd` file.
+- **Output differs in blur, angular gradients, moved images:** not converted yet; see the warnings in the report.

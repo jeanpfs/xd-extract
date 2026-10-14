@@ -29,6 +29,25 @@ function strings(n: unknown, acc: string[] = []): string[] {
   return acc;
 }
 
+/** Image components of the document, by the `uid` pattern fills use (the component's path). */
+export function parseImages(
+  manifest: unknown,
+): Map<string, { componentId: string; version?: string; type?: string }> {
+  const tree = manifest as ManifestNode | null;
+  const dir = tree?.children?.find((c) => c.path === 'resources');
+  const out = new Map<string, { componentId: string; version?: string; type?: string }>();
+  for (const c of dir?.components ?? []) {
+    const type = (c as { type?: string }).type;
+    if (!c.id || !c.path || !type?.startsWith('image/')) continue;
+    out.set(c.path, {
+      componentId: c.id,
+      ...(c.version !== undefined ? { version: c.version } : {}),
+      type,
+    });
+  }
+  return out;
+}
+
 /** The document-wide `resources/graphics/graphicContent.agc` (symbol masters, gradients), when listed. */
 export function parseResources(manifest: unknown): { componentId: string; version?: string } | null {
   const tree = manifest as ManifestNode | null;

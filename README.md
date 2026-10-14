@@ -12,7 +12,7 @@ XD share links draw into a `<canvas>`, so right-click and download give you noth
 
 - **Verified:** `.xd` files (one public sample), and a **real share link that carries vector data** (an XD 2.33 design with 6 artboards and 120 top-level nodes): the page, the manifest and every artboard were fetched on the first try, all 117 nodes with geometry converted, and the 26 exports that use masks (`clipPath`) validate. Only one such link has been tested.
 - **Not verified on real data:** the mask-drift correction (it never triggered; it has synthetic tests only), `/spec/` links, password-protected links, and AGC versions other than `1.5.0`. The only *public* link we could find (an Adobe sample) is raster-only. If a link fails, `xd inventory <link> --record dir` captures the exchange (see [Privacy](#privacy)) and an issue with the error code helps a lot.
-- **SVG only.** Blur, angular gradients and embedded images are **not converted**; text is emitted as live `<text>` and needs its font on the viewer's machine. Each is reported as a warning; nothing is dropped silently. See [What is converted](#what-is-converted).
+- **SVG only.** Blur and angular gradients are **not converted**; text is emitted as live `<text>` and needs its font on the viewer's machine. Each is reported as a warning; nothing is dropped silently. See [What is converted](#what-is-converted).
 - Developed and tested on macOS; CI runs on Linux. Windows is untested.
 
 ## Quick start
@@ -31,7 +31,7 @@ A real session on a public sample (`single.xd` from [xd2svg](https://github.com/
 $ xd inventory design.xd
 artboard | node | kind | bbox | colour | shapes | warnings
 Artboard – 1 | Group 26 | group | 0,1080 1920x4205 | rgb(255,255,255) | 52 | -
-Artboard – 1 | Footer | group | 0,5342 1920x821 | rgb(61,13,13) | 6 | unsupported-fill:pattern,text-font-not-embedded:Poppins,text-bbox-approximate
+Artboard – 1 | Footer | group | 0,5342 1920x821 | rgb(61,13,13) | 6 | text-font-not-embedded:Poppins,text-bbox-approximate
 Artboard – 1 | Market watch | group | 394,4688.6 1180x513.4 | rgb(255,255,255) | 4 | text-font-not-embedded:Poppins,text-bbox-approximate
 …
 
@@ -59,7 +59,7 @@ For a share link, pass the URL instead of the file: `xd inventory https://xd.ado
 | `xd extract <source> --node <name\|id:ID> [--artboard k] -o file.svg` | Exports one node. Also writes `file.svg.report.json`. |
 | `xd extract <source> --map map.json [-d dir]` | Exports several nodes from `[{"file": "cart.svg", "node": "cart"}]`. Nothing is written if one job fails. |
 | `xd validate <svg...> [--expect-same-frame] [--json]` | Static and raster checks. Exit `1` on any error. |
-| `xd redact <source> -o dir [--exclude <node>]...` | Writes an anonymised `document.json` (see [Privacy](#privacy)). |
+| `xd redact <source> -o dir [--exclude <node>]... [--keep-images [--drop-image <uid>]...]` | Writes an anonymised `document.json` (see [Privacy](#privacy)). |
 
 `<source>` is a share link, a `.xd` file, or a `document.json` from `xd redact`. Exit codes: `0` ok, `1` validation errors, `2` usage, `10-14` link errors, `20-21` file errors, `30` browser, `40-42` target errors, `70` unexpected.
 
@@ -67,8 +67,8 @@ For a share link, pass the URL instead of the file: `xd inventory https://xd.ado
 
 | Converted | Reported as a warning, not converted |
 |---|---|
-| Groups and nested transforms, rectangles (with corner radii), paths (including even-odd), compound shapes, lines, circles, ellipses, polygons; symbol instances (resolved to their master, with overrides) | Angular gradients, gradient text, image (pattern) fills, blur, inner shadows, text stroke and gradient text; a blend mode only sees what is inside the exported SVG (`blend-mode-backdrop`) |
-| Solid fills and strokes with alpha, caps, joins, miter limits, dashes; inside and outside stroke alignment on closed shapes; drop shadows (`global`) on shapes and groups, as an SVG filter; blend modes as `mix-blend-mode`; linear and radial gradients (fills and strokes, with stop alpha) | Alignment on lines and open paths (drawn centred) |
+| Groups and nested transforms, rectangles (with corner radii), paths (including even-odd), compound shapes, lines, circles, ellipses, polygons; symbol instances (resolved to their master, with overrides) | Angular gradients, gradient and image text fills, images on strokes, a moved or zoomed image fill, blur, inner shadows, text stroke and gradient text; a blend mode only sees what is inside the exported SVG (`blend-mode-backdrop`) |
+| Solid fills and strokes with alpha, caps, joins, miter limits, dashes; inside and outside stroke alignment on closed shapes; drop shadows (`global`) on shapes and groups, as an SVG filter; blend modes as `mix-blend-mode`; linear and radial gradients (fills and strokes, with stop alpha); image fills, embedded in the SVG as a data URI (cover or stretch; up to 2 MiB each, `--max-embed-bytes`) | Alignment on lines and open paths (drawn centred) |
 | Masks as `clipPath`, including masks nudged off the art by a few pixels | `style.clipPath` (repeat-grid masks) |
 | Text as live `<text>`: XD's own line breaks and baselines, per-range font, size, weight, italic and colour, left, centre and right alignment | Superscript and subscript, justified text, other text frame types, a font that is not installed (the viewer substitutes it) |
 | The frame (`viewBox`): the background plate when there is one, else the tight content box | |
@@ -113,6 +113,7 @@ Claude Code plugin: `/plugin marketplace add jeanpfs/xd-extract`, then `/plugin 
 
 - The CLI only fetches the link you give it and the CDN URLs that page names. With `--browser` the page is opened in a real browser, so the page's own scripts (including Adobe's analytics) run as they would for any visitor.
 - `--record <dir>` saves every HTTP response, **including the full design JSON**, with access tokens stripped. Do not commit a recording of a private design.
+- Image fills carry the picture's bytes into the SVG (base64). `--record` stores those bytes too. `xd redact` drops every picture unless you pass `--keep-images`: pictures are other people's work more often than not.
 - `xd redact` removes names, ids, text and fonts so a design can become a public test fixture (text keeps its length and line breaks, as `x`, so it still lays out). It **keeps the geometry**: the artwork itself must be yours to publish. Use `--exclude "<node name>"` to drop top-level nodes (a client logo, say) before anonymising; a name that matches nothing is an error.
 - Designs often contain other companies' logos. The MIT license of this tool and of the sample files does not cover third-party marks.
 

@@ -1,6 +1,6 @@
 import { buildManifest } from '@xd-extract/testkit';
 import { describe, expect, it } from 'vitest';
-import { parseManifest, parseResources } from '../src/manifest';
+import { parseImages, parseManifest, parseResources } from '../src/manifest';
 
 describe('parseManifest', () => {
   const manifest = buildManifest([
@@ -67,5 +67,30 @@ describe('parseResources', () => {
     expect(parseResources(null)).toBeNull();
     const withRes = buildManifest([{ id: 'a', name: 'A' }], {}, { resources: {} });
     expect(parseManifest(withRes).map((a) => a.id)).toEqual(['pasteboard', 'a']);
+  });
+});
+
+describe('parseImages', () => {
+  it('lists the image components by the uid pattern fills use', () => {
+    const m = buildManifest(
+      [{ id: 'a', name: 'A' }],
+      {},
+      { images: [{ uid: 'u1' }, { uid: 'u2', type: 'image/jpeg', version: '3' }] },
+    );
+    expect([...parseImages(m)]).toEqual([
+      ['u1', { componentId: 'img-u1', type: 'image/png' }],
+      ['u2', { componentId: 'img-u2', type: 'image/jpeg', version: '3' }],
+    ]);
+  });
+
+  it('ignores components that are not images, and manifests with none', () => {
+    const m = buildManifest(
+      [{ id: 'a', name: 'A' }],
+      {},
+      { images: [{ uid: 'u1', type: 'application/json' }] },
+    );
+    expect(parseImages(m).size).toBe(0);
+    expect(parseImages(buildManifest([{ id: 'a', name: 'A' }])).size).toBe(0);
+    expect(parseImages(null).size).toBe(0);
   });
 });

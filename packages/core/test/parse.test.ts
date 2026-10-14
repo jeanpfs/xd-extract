@@ -4,10 +4,13 @@ import {
   circle,
   gradientFill,
   group,
+  patternFill,
+  pngBase64,
   polygon,
   rect,
   resourcesDoc,
   solid,
+  stripesPng,
   syncRef,
   text,
   withTransform,
@@ -1041,5 +1044,98 @@ describe('gradients', () => {
     });
     t.meta = { ux: {} };
     expect(only(parseAgc(agcDoc([t]))).warnings.map((w) => w.code)).toContain('unsupported-fill:gradient');
+  });
+});
+
+describe('image fills', () => {
+  const png = stripesPng();
+  const parseWith = (
+    fill: ReturnType<typeof patternFill>,
+    images: Record<string, string> = { u1: png },
+    opts = {},
+  ) => {
+    const r = only(parseAgc(agcDoc([rect('r', 0, 0, 40, 40, { fill })]), { images, ...opts }));
+    return { r, fill: (r.node as IrShape).fill as Paint };
+  };
+  const codes = (r: { warnings: { code: string }[] }) => r.warnings.map((w) => w.code);
+
+  it('reads the picture, its pixel size and cover as the default fit', () => {
+    const { r, fill } = parseWith(patternFill('u1'));
+    expect(codes(r)).toEqual([]);
+    expect(fill).toEqual({
+      kind: 'image',
+      uid: 'u1',
+      mime: 'image/png',
+      base64: png,
+      width: 20,
+      height: 10,
+      fit: 'cover',
+    });
+  });
+
+  it('stretches for scaleBehavior fill', () => {
+    expect((parseWith(patternFill('u1', { behavior: 'fill' })).fill as { fit: string }).fit).toBe('stretch');
+  });
+
+  it('draws an unknown scale behaviour as cover and says so', () => {
+    const { r, fill } = parseWith(patternFill('u1', { behavior: 'tile' }));
+    expect((fill as { fit: string }).fit).toBe('cover');
+    expect(codes(r)).toEqual(['pattern-scale-unknown:tile']);
+  });
+
+  it('says a moved or zoomed fill is drawn at the default', () => {
+    for (const ux of [{ scale: 2.7 }, { offsetX: 0.07 }, { offsetY: 0.7 }]) {
+      expect(codes(parseWith(patternFill('u1', { ux })).r)).toEqual(['pattern-offset-ignored']);
+    }
+    expect(codes(parseWith(patternFill('u1', { ux: { scale: 1, offsetX: 0, offsetY: 0 } })).r)).toEqual([]);
+  });
+
+  it('reports bytes that are not in the document, as missing art', () => {
+    const { r, fill } = parseWith(patternFill('u1'), {});
+    expect(fill.kind).toBe('unsupported');
+    expect(codes(r)).toEqual(['unsupported-fill:pattern']);
+  });
+
+  it('reports an image over the embed limit, and honours a raised limit', () => {
+    const big = pngBase64(64, 64, (x, y) => [x * 4, y * 4, (x * y) % 256]);
+    const { r } = parseWith(patternFill('u1'), { u1: big }, { maxEmbedBytes: 100 });
+    expect(codes(r)).toEqual(['unsupported-fill:pattern-too-large']);
+    expect(codes(parseWith(patternFill('u1'), { u1: big }, { maxEmbedBytes: 1_000_000 }).r)).toEqual([]);
+  });
+
+  it('reports bytes that are not a picture', () => {
+    const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>').toString('base64');
+    expect(codes(parseWith(patternFill('u1'), { u1: svg }).r)).toEqual(['unsupported-fill:pattern-format']);
+  });
+
+  it('reports a fill with no id or no size, and an image on a stroke or on text', () => {
+    const noId = patternFill('u1');
+    delete (noId.pattern!.meta!.ux as { uid?: string }).uid;
+    expect(codes(parseWith(noId).r)).toEqual(['unsupported-fill:pattern']);
+    expect(codes(parseWith(patternFill('u1', { w: 0 })).r)).toEqual(['unsupported-fill:pattern']);
+    const stroked = only(
+      parseAgc(agcDoc([rect('r', 0, 0, 5, 5, { stroke: { ...patternFill('u1'), width: 2 } })]), {
+        images: { u1: png },
+      }),
+    );
+    expect(codes(stroked)).toEqual(['unsupported-stroke:pattern']);
+    const t = text('T', 'abc', { style: { fill: patternFill('u1') } });
+    t.meta = { ux: {} };
+    expect(codes(only(parseAgc(agcDoc([t]), { images: { u1: png } })))).toContain('unsupported-fill:pattern');
+  });
+
+  it('takes the bytes from the document, and is a plate candidate', () => {
+    const doc = {
+      source: { kind: 'fixture' as const, ref: 't' },
+      artboards: [
+        { id: 'a', name: 'A', agc: agcDoc([rect('r', 0, 0, 40, 40, { fill: patternFill('u1') })]) },
+      ],
+      images: { u1: png },
+    };
+    const root = parseDocument(doc)[0]!.roots[0]!;
+    expect((root.node as IrShape).fill?.kind).toBe('image');
+    expect((root.node as IrShape).ownFill).toBe(true);
+    const tiny = parseDocument(doc, { maxEmbedBytes: 10 })[0]!.roots[0]!;
+    expect(codes(tiny)).toEqual(['unsupported-fill:pattern-too-large']);
   });
 });

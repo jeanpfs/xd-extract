@@ -33,8 +33,21 @@ export type Gradient =
       stops: GradientStop[];
     };
 
+/** An image fill: the picture is `width` x `height` pixels and fits the shape's box as `fit`. */
+export interface ImageFill {
+  kind: 'image';
+  uid: string;
+  mime: string;
+  base64: string;
+  width: number;
+  height: number;
+  /** cover: scaled to cover the box, centred, cropped. stretch: scaled to the box, aspect ratio ignored. */
+  fit: 'cover' | 'stretch';
+}
+
 export type Paint =
   | { kind: 'solid'; css: string }
+  | ImageFill
   | { kind: 'gradient'; def: Gradient }
   | { kind: 'unsupported'; reason: string };
 

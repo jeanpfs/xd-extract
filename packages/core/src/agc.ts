@@ -42,8 +42,25 @@ export interface AgcGradient {
   meta?: { ux?: { gradientResources?: AgcGradientResource } };
 }
 
+export interface AgcPattern {
+  width?: number;
+  height?: number;
+  href?: string;
+  meta?: {
+    ux?: {
+      uid?: string;
+      scaleBehavior?: string;
+      /** A moved or zoomed image fill. */
+      offsetX?: number;
+      offsetY?: number;
+      scale?: number;
+    };
+  };
+}
+
 export interface AgcPaint {
   type?: string;
+  pattern?: AgcPattern;
   gradient?: AgcGradient;
   color?: AgcColor;
   width?: number;

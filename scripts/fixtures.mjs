@@ -1,4 +1,4 @@
-// Public fixtures: upstream files pinned by commit and sha256, redacted by `xd redact` into fixtures/public/<name>.
+// Public fixtures (`keepImages`: keep the embedded pictures; `dropImages`: original uids to leave out): upstream files pinned by commit and sha256, redacted by `xd redact` into fixtures/public/<name>.
 // Add a file only after rendering every node and checking for third-party marks (see AGENTS.md), then
 // record its licence in fixtures/public/NOTICE.
 export const FIXTURES = [
@@ -16,6 +16,10 @@ export const FIXTURES = [
     // modes, polygons, repeat grids, symbols, blur, shadows and area text.
     name: 'tests-suite',
     file: 'tests_suite.xd',
+    // Its pictures are Adobe's own numbered test tiles (BSD-2-Clause), so they are kept: the goldens show
+    // image fills. Except the Glyphicons Pro "home" icon, a commercial icon set, which is dropped.
+    keepImages: true,
+    dropImages: ['19b2d1e1fc5880649de597ec57f5e20b'],
     url: 'https://raw.githubusercontent.com/AdobeXD/xd-to-flutter-plugin/16e22745ce9e9f67c2c6458be24420a8047be7be/test_suite/tests_suite.xd',
     sha256: 'b3612d16789c77cb4ec971d49bbf54b75442ae506b30148cb4f0935e6fc72630',
     exclude: [],

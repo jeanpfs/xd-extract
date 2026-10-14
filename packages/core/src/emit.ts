@@ -1,6 +1,6 @@
 import { genericFamily, quoteFamily } from './font';
 import { boxOf, collectPaintFacts, type FrameResult } from './frame';
-import type { Geom, Gradient, IrGroup, IrNode, IrShape, IrText, Paint, Stroke } from './ir';
+import type { Geom, Gradient, ImageFill, IrGroup, IrNode, IrShape, IrText, Paint, Stroke } from './ir';
 import { IDENTITY, isIdentity, type Matrix, matrixAttr, mul, round, translate } from './matrix';
 import { shadowBox } from './shadow';
 
@@ -64,6 +64,30 @@ const escText = (v: string) =>
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
+/**
+ * An image fill as an SVG pattern over the shape's bounding box. The picture is placed in its own pixel
+ * box and the pattern's viewBox maps that box onto the shape: `slice` covers and crops, `none` stretches.
+ */
+function imagePatternEl(id: string, p: ImageFill): string {
+  return el(
+    'pattern',
+    {
+      id,
+      patternUnits: 'objectBoundingBox',
+      width: 1,
+      height: 1,
+      viewBox: `0 0 ${round(p.width)} ${round(p.height)}`,
+      preserveAspectRatio: p.fit === 'cover' ? 'xMidYMid slice' : 'none',
+    },
+    el('image', {
+      width: round(p.width),
+      height: round(p.height),
+      preserveAspectRatio: 'none',
+      href: `data:${p.mime};base64,${p.base64}`,
+    }),
+  );
+}
+
 function gradientEl(id: string, g: Gradient): string {
   const stops = g.stops
     .map((s) =>
@@ -125,12 +149,23 @@ export function emitSvg(root: IrNode, frameResult: FrameResult): EmitResult {
   let alignSeq = 0;
   let shadowSeq = 0;
   const gradientIds = new Map<string, string>();
+  const imageIds = new Map<string, string>();
 
   /** The SVG value for a paint, registering a gradient definition once per distinct gradient. */
   const paintCss = (p: Paint | null): string | undefined => {
     if (!p) return undefined;
     if (p.kind === 'solid') return p.css;
     if (p.kind === 'unsupported') return undefined;
+    if (p.kind === 'image') {
+      const imageKey = `${p.uid}|${p.fit}|${p.width}x${p.height}`;
+      let imageId = imageIds.get(imageKey);
+      if (!imageId) {
+        imageId = `img-${imageIds.size + 1}`;
+        imageIds.set(imageKey, imageId);
+        defs.push(imagePatternEl(imageId, p));
+      }
+      return `url(#${imageId})`;
+    }
     const key = JSON.stringify(p.def);
     let id = gradientIds.get(key);
     if (!id) {

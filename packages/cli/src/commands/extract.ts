@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { convertRoot, parseDocument, type Report, resolveNode, XdError } from '@xd-extract/core';
 import type { Io } from '../io';
-import { openSource } from '../source';
+import { embedLimit, openSource } from '../source';
 
 interface Job {
   file: string;
@@ -48,6 +48,7 @@ export async function extractCommand(args: string[], io: Io): Promise<number> {
       json: { type: 'boolean' },
       browser: { type: 'boolean' },
       record: { type: 'string' },
+      'max-embed-bytes': { type: 'string' },
     },
   });
 
@@ -62,7 +63,8 @@ export async function extractCommand(args: string[], io: Io): Promise<number> {
   }
 
   const doc = await openSource(positionals[0], values);
-  const artboards = parseDocument(doc);
+  const maxEmbedBytes = embedLimit(values['max-embed-bytes']);
+  const artboards = parseDocument(doc, maxEmbedBytes === undefined ? {} : { maxEmbedBytes });
 
   // Resolve and convert every job first so a failing job leaves nothing half-written.
   const done = jobs.map((job) => {

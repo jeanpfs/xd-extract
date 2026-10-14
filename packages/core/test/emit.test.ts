@@ -5,9 +5,11 @@ import {
   circle,
   gradientFill,
   group,
+  patternFill,
   polygon,
   rect,
   solid,
+  stripesPng,
   syncRef,
   text,
   withTransform,
@@ -17,7 +19,7 @@ import { convertRoot } from '../src/convert';
 import { parseAgc } from '../src/parse';
 import { rasterize } from '../src/raster';
 import { visibleReach } from '../src/shadow';
-import { validateRaster } from '../src/validate';
+import { validateRaster, validateStatic } from '../src/validate';
 
 const convert = (...roots: Parameters<typeof agcDoc>[0]) => {
   const parsed = parseAgc(agcDoc(roots));
@@ -689,5 +691,66 @@ describe('gradients', () => {
     const f = horizontal({ units: 'userSpaceOnUse', x1: 0, y1: 0, x2: 100, y2: 0 });
     const { svg } = convert(group('Root', [rect('r', 0, 0, 100, 40, { fill: f })]));
     expect(svg).toContain('gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="100" y2="0"');
+  });
+});
+
+describe('image fills', () => {
+  const png = stripesPng();
+  // resampling shifts a channel by a level or two
+  const near = (px: number[], want: number[]) =>
+    want.every((v, i) => Math.abs((px[i] as number) - v) <= 3) && px[3] === 255;
+  const pic = (fill: ReturnType<typeof patternFill>, size = 40) => rect('r', 0, 0, size, size, { fill });
+  const withImages = (...roots: Parameters<typeof agcDoc>[0]) => {
+    const parsed = parseAgc(agcDoc(roots), { images: { u1: png } });
+    return convertRoot('A', parsed[0]!, null);
+  };
+  const pixel = (svg: string, w: number, x: number, y: number) => {
+    const img = new Resvg(svg, {
+      fitTo: { mode: 'width', value: w },
+      font: { loadSystemFonts: false },
+    }).render();
+    const i = (y * img.width + x) * 4;
+    return [...img.pixels.slice(i, i + 4)];
+  };
+
+  it('emits a pattern over the bounding box that carries the picture as a data URI', () => {
+    const { svg } = withImages(group('Root', [pic(patternFill('u1'))]));
+    expect(svg).toContain(
+      '<pattern id="img-1" patternUnits="objectBoundingBox" width="1" height="1" viewBox="0 0 20 10" preserveAspectRatio="xMidYMid slice">',
+    );
+    expect(svg).toContain(`href="data:image/png;base64,${png}"`);
+    expect(svg).toMatch(/<rect[^>]*fill="url\(#img-1\)"/);
+  });
+
+  it('covers a square with the middle of a wide picture', () => {
+    const { svg } = withImages(group('Root', [pic(patternFill('u1'))]));
+    // the square shows only the green middle half of the 20 x 10 picture
+    for (const x of [2, 20, 37]) expect(near(pixel(svg, 40, x, 20), [0, 255, 0])).toBe(true);
+  });
+
+  it('stretches the whole picture for scaleBehavior fill', () => {
+    const { svg } = withImages(group('Root', [pic(patternFill('u1', { behavior: 'fill' }))]));
+    expect(svg).toContain('preserveAspectRatio="none"');
+    expect(near(pixel(svg, 40, 2, 20), [255, 0, 0])).toBe(true);
+    expect(near(pixel(svg, 40, 20, 20), [0, 255, 0])).toBe(true);
+    expect(near(pixel(svg, 40, 37, 20), [0, 0, 255])).toBe(true);
+  });
+
+  it('writes the picture once for many shapes, and again only for another fit', () => {
+    const { svg } = withImages(
+      group('Root', [
+        pic(patternFill('u1')),
+        rect('b', 50, 0, 40, 40, { fill: patternFill('u1') }),
+        rect('c', 100, 0, 40, 40, { fill: patternFill('u1', { behavior: 'fill' }) }),
+      ]),
+    );
+    expect(svg.match(/<pattern /g)).toHaveLength(2);
+    expect(svg.match(/data:image\/png/g)).toHaveLength(2);
+    expect(svg.match(/fill="url\(#img-1\)"/g)).toHaveLength(2);
+  });
+
+  it('is valid SVG: the reference resolves', () => {
+    const { svg } = withImages(group('Root', [pic(patternFill('u1'))]));
+    expect(validateStatic(svg)).toEqual([]);
   });
 });

@@ -2,7 +2,16 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EXIT_CODES, EXIT_VALIDATION_FAILED } from '@xd-extract/core';
-import { agcDoc, buildManifest, circle, group, rect, solid } from '@xd-extract/testkit';
+import {
+  agcDoc,
+  buildManifest,
+  circle,
+  group,
+  patternFill,
+  rect,
+  solid,
+  stripesPng,
+} from '@xd-extract/testkit';
 import { strToU8, zipSync } from 'fflate';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { run } from '../src/main';
@@ -19,6 +28,7 @@ const agc = agcDoc([
 
 let dir: string;
 let xd: string;
+let xdImage: string;
 
 beforeAll(() => {
   dir = mkdtempSync(join(tmpdir(), 'xd-cli-'));
@@ -31,6 +41,21 @@ beforeAll(() => {
       manifest: j(buildManifest([{ id: 'a1', name: 'Home' }])),
       'artwork/pasteboard/graphics/graphicContent.agc': j({ version: '1.5.0', children: [] }),
       'artwork/artboard-a1/graphics/graphicContent.agc': j(agc),
+    }),
+  );
+});
+beforeAll(() => {
+  xdImage = join(dir, 'photo.xd');
+  const j = (v: unknown) => strToU8(JSON.stringify(v));
+  const photo = agcDoc([group('Photo', [rect('p', 0, 0, 40, 40, { fill: patternFill('u1') })])]);
+  writeFileSync(
+    xdImage,
+    zipSync({
+      mimetype: [strToU8(MIMETYPE), { level: 0 }],
+      manifest: j(buildManifest([{ id: 'a1', name: 'Home' }])),
+      'artwork/pasteboard/graphics/graphicContent.agc': j({ version: '1.5.0', children: [] }),
+      'artwork/artboard-a1/graphics/graphicContent.agc': j(photo),
+      'resources/u1': new Uint8Array(Buffer.from(stripesPng(), 'base64')),
     }),
   );
 });
@@ -212,5 +237,52 @@ describe('redact', () => {
     expect(r.code).toBe(EXIT_CODES.Usage);
     expect(r.err).toContain('matched no top-level node');
     expect(existsSync(join(out, 'document.json'))).toBe(false);
+  });
+});
+
+describe('images', () => {
+  it('embeds the picture of an image fill, and --max-embed-bytes can refuse it', async () => {
+    const out = join(dir, 'photo.svg');
+    const ok = await xdc('extract', xdImage, '--node', 'Photo', '-o', out);
+    expect(ok.code).toBe(0);
+    expect(readFileSync(out, 'utf8')).toContain('data:image/png;base64,');
+
+    const small = join(dir, 'photo-small.svg');
+    const refused = await xdc('extract', xdImage, '--node', 'Photo', '-o', small, '--max-embed-bytes', '10');
+    expect(refused.out).toContain('unsupported-fill:pattern-too-large');
+    const inv = await xdc('inventory', xdImage, '--max-embed-bytes', '10');
+    expect(inv.out).toContain('unsupported-fill:pattern-too-large');
+  });
+
+  it('rejects a limit that is not a whole number of bytes', async () => {
+    for (const bad of ['abc', '-1', '1.5']) {
+      const r = await xdc('inventory', xdImage, '--max-embed-bytes', bad);
+      expect(r.code, bad).toBe(EXIT_CODES.Usage);
+    }
+  });
+
+  it('--drop-image needs --keep-images and a uid that exists', async () => {
+    const out = join(dir, 'red-img-drop');
+    const alone = await xdc('redact', xdImage, '-o', out, '--drop-image', 'u1');
+    expect(alone.code).toBe(EXIT_CODES.Usage);
+    const typo = await xdc('redact', xdImage, '-o', out, '--keep-images', '--drop-image', 'nope');
+    expect(typo.code).toBe(EXIT_CODES.Usage);
+    expect(typo.err).toContain('matched no image');
+    const ok = await xdc('redact', xdImage, '-o', out, '--keep-images', '--drop-image', 'u1');
+    expect(ok.code).toBe(0);
+    expect(readFileSync(join(out, 'document.json'), 'utf8')).not.toContain('"images"');
+  });
+
+  it('redact drops the pictures, and --keep-images keeps them', async () => {
+    const plain = join(dir, 'red-img');
+    expect((await xdc('redact', xdImage, '-o', plain)).code).toBe(0);
+    expect(readFileSync(join(plain, 'document.json'), 'utf8')).not.toContain('"images"');
+
+    const kept = join(dir, 'red-img-kept');
+    const r = await xdc('redact', xdImage, '-o', kept, '--keep-images');
+    expect(r.out).toContain('kept 1 image');
+    const svg = join(dir, 'from-redacted.svg');
+    await xdc('extract', join(kept, 'document.json'), '--node', 'group-1', '-o', svg);
+    expect(readFileSync(svg, 'utf8')).toContain('data:image/png;base64,');
   });
 });

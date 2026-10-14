@@ -14,6 +14,8 @@ export async function redactCommand(args: string[], io: Io): Promise<number> {
       browser: { type: 'boolean' },
       record: { type: 'string' },
       exclude: { type: 'string', multiple: true },
+      'keep-images': { type: 'boolean' },
+      'drop-image': { type: 'string', multiple: true },
     },
   });
   if (!values.out) throw new XdError('Usage', 'redact needs -o <dir>');
@@ -22,7 +24,17 @@ export async function redactCommand(args: string[], io: Io): Promise<number> {
   for (const [name, count] of Object.entries(dropped)) {
     if (count === 0) throw new XdError('Usage', `--exclude "${name}" matched no top-level node`);
   }
-  const red = redactDocument(doc);
+  const dropImages = values['drop-image'] ?? [];
+  if (dropImages.length && !values['keep-images']) {
+    throw new XdError(
+      'Usage',
+      '--drop-image only applies with --keep-images (pictures are dropped by default)',
+    );
+  }
+  for (const uid of dropImages) {
+    if (!(uid in (source.images ?? {}))) throw new XdError('Usage', `--drop-image "${uid}" matched no image`);
+  }
+  const red = redactDocument(doc, { keepImages: values['keep-images'] === true, dropImages });
   mkdirSync(values.out, { recursive: true });
   const file = join(values.out, 'document.json');
   writeFileSync(file, JSON.stringify(red));
@@ -31,5 +43,8 @@ export async function redactCommand(args: string[], io: Io): Promise<number> {
   io.out(
     'Names, ids, text and fonts are removed; geometry is kept. Confirm the artwork itself is publishable before committing.\n',
   );
+  if (values['keep-images'] && red.images) {
+    io.out(`kept ${Object.keys(red.images).length} image(s): only for pictures you may publish.\n`);
+  }
   return 0;
 }

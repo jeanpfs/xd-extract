@@ -6,13 +6,16 @@ export const CDN_HOST = 'https://cdn-sharing.adobecc.com';
 export type FetchLike = (input: string, init?: { redirect?: 'follow' }) => Promise<Response>;
 
 export interface Recorder {
-  record(url: string, status: number, body: string): void;
+  /** `body` is text, or base64 when `base64` is set (an image). */
+  record(url: string, status: number, body: string, base64?: boolean): void;
 }
 
 interface IndexEntry {
   key: string;
   status: number;
   file: string;
+  /** The file holds base64 of binary bytes (images), not text. */
+  encoding?: 'base64';
 }
 
 /** Strips the access token and replaces the CDN host so recordings are safe to commit. */
@@ -29,10 +32,15 @@ export function createRecorder(dir: string): Recorder {
   mkdirSync(dir, { recursive: true });
   const entries: IndexEntry[] = [];
   return {
-    record(url, status, body) {
+    record(url, status, body, base64) {
       const file = `${entries.length + 1}.txt`;
-      writeFileSync(join(dir, file), redactTokens(body));
-      entries.push({ key: redactTokens(url), status, file });
+      writeFileSync(join(dir, file), base64 ? body : redactTokens(body));
+      entries.push({
+        key: redactTokens(url),
+        status,
+        file,
+        ...(base64 ? { encoding: 'base64' as const } : {}),
+      });
       writeFileSync(join(dir, 'index.json'), JSON.stringify({ entries }, null, 2));
     },
   };
@@ -44,6 +52,8 @@ export function createReplayFetch(dir: string): FetchLike {
     const key = redactTokens(input);
     const hit = entries.find((e) => e.key === key);
     if (!hit) throw new Error(`no recording for ${key}`);
-    return new Response(hydrate(readFileSync(join(dir, hit.file), 'utf8')), { status: hit.status });
+    const raw = readFileSync(join(dir, hit.file), 'utf8');
+    if (hit.encoding === 'base64') return new Response(Buffer.from(raw, 'base64'), { status: hit.status });
+    return new Response(hydrate(raw), { status: hit.status });
   };
 }

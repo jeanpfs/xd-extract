@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseAgc, parseDocument } from '@xd-extract/core';
-import { agcDoc, buildManifest, group, rect, solid } from '@xd-extract/testkit';
+import { agcDoc, buildManifest, group, patternFill, rect, solid, stripesPng } from '@xd-extract/testkit';
 import { strToU8, zipSync } from 'fflate';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadFixtureDocument, loadXdFile } from '../src';
@@ -133,7 +133,47 @@ describe('resources AGC', () => {
   });
 });
 
+describe('images', () => {
+  const png = stripesPng();
+  const withImage = (uid: string) =>
+    agcDoc([group('Photo', [rect('r', 0, 0, 40, 40, { fill: patternFill(uid) })])]);
+
+  it('reads the image of each pattern fill from resources/<uid>, and only those', async () => {
+    const doc = await loadXdFile(
+      await write(
+        'img.xd',
+        buildXd({
+          'artwork/artboard-a1/graphics/graphicContent.agc': json(withImage('u1')),
+          'resources/u1': new Uint8Array(Buffer.from(png, 'base64')),
+          'resources/unused': strToU8('never inflated'),
+        }),
+      ),
+    );
+    expect(doc.images).toEqual({ u1: png });
+    const roots = parseDocument(doc).find((a) => a.name === 'Splash')!.roots;
+    expect((roots[0]!.node as { children: { fill?: { kind: string } }[] }).children[0]!.fill?.kind).toBe(
+      'image',
+    );
+  });
+
+  it('has no images when no fill uses one, or when its bytes are not in the archive', async () => {
+    expect((await loadXdFile(await write('noimg.xd', buildXd()))).images).toBeUndefined();
+    const missing = await loadXdFile(
+      await write(
+        'missing.xd',
+        buildXd({ 'artwork/artboard-a1/graphics/graphicContent.agc': json(withImage('gone')) }),
+      ),
+    );
+    expect(missing.images).toBeUndefined();
+  });
+});
+
 describe('loadFixtureDocument', () => {
+  it('passes the images through', async () => {
+    const p = await write('withimg.json', JSON.stringify({ artboards: [], images: { u1: 'AAAA' } }));
+    expect((await loadFixtureDocument(p)).images).toEqual({ u1: 'AAAA' });
+  });
+
   it('passes the resources document through', async () => {
     const resources = { version: '1.5.0', children: [], resources: { gradients: {} } };
     const p = await write('withres.json', JSON.stringify({ artboards: [], resources }));

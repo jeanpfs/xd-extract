@@ -23,6 +23,8 @@ const graphics = (key: string, version?: string) => ({
 export interface ManifestOptions {
   /** Adds the document-wide resources/graphics/graphicContent.agc component (symbol masters, gradients). */
   resources?: { version?: string };
+  /** Image components listed on the resources directory, as XD lists them. */
+  images?: { uid: string; type?: string; version?: string }[];
 }
 
 export function buildManifest(
@@ -54,13 +56,20 @@ export function buildManifest(
           })),
         ],
       },
-      ...(opts.resources
+      ...(opts.resources || opts.images
         ? [
             {
               id: 'dir-resources',
               name: 'resources',
               path: 'resources',
-              children: [graphics('resources', opts.resources.version)],
+              children: opts.resources ? [graphics('resources', opts.resources.version)] : [],
+              components: (opts.images ?? []).map((i) => ({
+                id: `img-${i.uid}`,
+                path: i.uid,
+                type: i.type ?? 'image/png',
+                rel: 'primary',
+                ...(i.version === undefined ? {} : { version: i.version }),
+              })),
             },
           ]
         : []),

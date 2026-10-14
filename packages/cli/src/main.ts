@@ -10,10 +10,11 @@ export const USAGE = `xd - extract SVG from Adobe XD
 
 Usage:
   xd inventory <source> [--artboard <name|id>] [--find <name|colour>] [--json] [--preview <file.html>]
-  xd extract   <source> --node <name|id:ID> [--artboard <name|id>] -o <file.svg>
-  xd extract   <source> --map <map.json> [-d <dir>]
+               [--max-embed-bytes <n>]
+  xd extract   <source> --node <name|id:ID> [--artboard <name|id>] -o <file.svg> [--max-embed-bytes <n>]
+  xd extract   <source> --map <map.json> [-d <dir>] [--max-embed-bytes <n>]
   xd validate  <file.svg...> [--expect-same-frame] [--json]
-  xd redact    <source> -o <dir> [--exclude <top-level node name>]...
+  xd redact    <source> -o <dir> [--exclude <top-level node name>]... [--keep-images [--drop-image <uid>]...]
   xd --version
 
 <source> is an https://xd.adobe.com/view/... share link, a .xd file, or a document.json from "xd redact".

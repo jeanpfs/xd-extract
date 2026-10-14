@@ -18,6 +18,8 @@ export const pageHtml = (url = manifestUrl) =>
 interface Route {
   status?: number;
   body: unknown;
+  /** Binary body (an image); wins over `body`. */
+  bytes?: Uint8Array;
 }
 
 /** Exact-URL router. Unknown URLs answer 404, like a missing component would. */
@@ -27,6 +29,7 @@ export const fakeFetch =
     calls.push(url);
     const hit = routes[url];
     if (!hit) return new Response('', { status: 404 });
+    if (hit.bytes) return new Response(Buffer.from(hit.bytes), { status: hit.status ?? 200 });
     return new Response(typeof hit.body === 'string' ? hit.body : JSON.stringify(hit.body), {
       status: hit.status ?? 200,
     });

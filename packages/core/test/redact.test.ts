@@ -1,3 +1,4 @@
+import { agcDoc, patternFill, rect, stripesPng } from '@xd-extract/testkit';
 import { describe, expect, it } from 'vitest';
 import type { AgcDocument } from '../src/agc';
 import { convertRoot } from '../src/convert';
@@ -338,5 +339,76 @@ describe('redactDocument resources', () => {
 
   it('writes no resources key when the input had none', () => {
     expect(redactDocument({ ...input, resources: undefined }).resources).toBeUndefined();
+  });
+});
+
+describe('redactDocument images', () => {
+  const png = stripesPng();
+  const input: XdDocument = {
+    source: { kind: 'xd-file', ref: 'private.xd' },
+    artboards: [
+      {
+        id: 'ab',
+        name: 'Page',
+        agc: agcDoc([rect('Photo', 0, 0, 40, 40, { fill: patternFill('secret-uid') })]),
+      },
+    ],
+    images: { 'secret-uid': png },
+  };
+
+  it('drops the pictures by default: they are rarely the author to publish', () => {
+    const red = redactDocument(input);
+    expect(red.images).toBeUndefined();
+    expect(JSON.stringify(red)).not.toContain(png);
+    expect(JSON.stringify(red)).not.toContain('secret-uid');
+  });
+
+  it('keeps them on request, under the same token the fill refers to', () => {
+    const red = redactDocument(input, { keepImages: true });
+    const uid = Object.keys(red.images ?? {})[0] as string;
+    expect(red.images?.[uid]).toBe(png);
+    expect(uid).not.toBe('secret-uid');
+    const root = parseDocument(red)[0]!.roots[0]!;
+    expect(root.warnings).toEqual([]);
+    expect((root.node as { fill?: { kind: string } }).fill?.kind).toBe('image');
+  });
+
+  it('keeps the fit, but not the file path of the picture', () => {
+    const fill = patternFill('secret-uid', { behavior: 'fill' });
+    (fill.pattern as { href: string }).href = 'C:\\Users\\Someone\\pic.png';
+    const doc: XdDocument = {
+      ...input,
+      artboards: [{ id: 'ab', name: 'p', agc: agcDoc([rect('r', 0, 0, 5, 5, { fill })]) }],
+    };
+    const text = JSON.stringify(redactDocument(doc, { keepImages: true }));
+    expect(text).not.toContain('Someone');
+    expect(text).toContain('"scaleBehavior":"fill"');
+  });
+});
+
+describe('redactDocument dropImages', () => {
+  it('leaves out the pictures named, by their original uid, and keeps the rest', () => {
+    const doc: XdDocument = {
+      source: { kind: 'xd-file', ref: 'x.xd' },
+      artboards: [
+        {
+          id: 'ab',
+          name: 'P',
+          agc: agcDoc([
+            rect('a', 0, 0, 5, 5, { fill: patternFill('keep-me') }),
+            rect('b', 0, 0, 5, 5, { fill: patternFill('drop-me') }),
+          ]),
+        },
+      ],
+      images: { 'keep-me': stripesPng(), 'drop-me': stripesPng() },
+    };
+    const red = redactDocument(doc, { keepImages: true, dropImages: ['drop-me'] });
+    expect(Object.keys(red.images ?? {})).toHaveLength(1);
+    const roots = parseDocument(red)[0]!.roots;
+    expect(roots.map((r) => (r.node as { fill?: { kind: string } }).fill?.kind)).toEqual([
+      'image',
+      'unsupported',
+    ]);
+    expect(roots[1]!.warnings.map((w) => w.code)).toEqual(['unsupported-fill:pattern']);
   });
 });

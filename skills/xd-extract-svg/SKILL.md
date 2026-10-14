@@ -7,7 +7,7 @@ description: "Extract SVG vector art (icons, illustrations, logos, whole screens
 
 Pull **vector** art out of an Adobe XD design. The art is never in the viewer's canvas: it arrives as a scene-graph JSON (AGC) that the viewer only draws. The `xd` CLI downloads that JSON (or reads it from a `.xd` file), converts the node tree to SVG and validates the result.
 
-Output is **SVG only**. Angular gradients, blur, inner shadows and embedded images are not converted yet; text is emitted as live `<text>` and needs its font; the tool reports each one as a warning instead of dropping it silently.
+Output is **SVG only**. Angular gradients, blur and inner shadows are not converted yet; image fills are embedded in the SVG as data URIs (large ones may be refused: `--max-embed-bytes`); text is emitted as live `<text>` and needs its font; the tool reports each one as a warning instead of dropping it silently.
 
 ## Run the CLI
 

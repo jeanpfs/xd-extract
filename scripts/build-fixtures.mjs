@@ -11,6 +11,8 @@ for (const f of FIXTURES) {
     `fixtures/public/${f.name}`,
   ];
   for (const name of f.exclude) args.push('--exclude', name);
+  if (f.keepImages) args.push('--keep-images');
+  for (const uid of f.dropImages ?? []) args.push('--drop-image', uid);
   const r = spawnSync(process.execPath, args, { stdio: 'inherit' });
   if (r.status !== 0) process.exit(r.status ?? 1);
 }
