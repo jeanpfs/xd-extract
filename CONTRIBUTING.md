@@ -17,3 +17,7 @@ Setup and commands are in the [README](README.md#development); conventions are i
 1. Update `version` in `packages/cli/package.json` and add a `## X.Y.Z (date)` section to `CHANGELOG.md`.
 2. Commit, then `git tag vX.Y.Z && git push --tags`.
 3. `.github/workflows/release.yml` checks the tag against the version, runs every check, publishes to npm with provenance (needs the `NPM_TOKEN` repo secret) and creates the GitHub release from the CHANGELOG section.
+
+## Code of Conduct
+
+Participation is governed by the [Code of Conduct](CODE_OF_CONDUCT.md). Security issues: see [SECURITY.md](SECURITY.md).
