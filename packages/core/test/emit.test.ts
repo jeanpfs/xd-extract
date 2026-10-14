@@ -844,3 +844,85 @@ describe('visibleBlurReach', () => {
     expect(visibleBlurReach(20)).toBeCloseTo(2 * visibleBlurReach(10), 6);
   });
 });
+
+describe('text stroke, gradient fill and scripts', () => {
+  const stroke = { type: 'solid', color: { mode: 'RGB', value: { r: 0, g: 0, b: 0 } }, width: 3 };
+  const grad = gradientFill('linear', [
+    [0, [255, 0, 0]],
+    [1, [0, 0, 255]],
+  ]);
+  const withCard = (t: ReturnType<typeof text>) => convert(group('Root', [card(), t]));
+
+  it('strokes the <text>: colour, width, join, cap and dashes', () => {
+    const { svg } = withCard(
+      text('T', 'Hi', { style: { stroke: { ...stroke, join: 'round', cap: 'round', dash: [4, 2] } } }),
+    );
+    expect(svg).toMatch(
+      /<text [^>]*stroke="rgb\(0,0,0\)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 2"/,
+    );
+  });
+
+  it('has no stroke attribute on text without one', () => {
+    expect(withCard(text('T', 'Hi')).svg).not.toContain('stroke=');
+  });
+
+  it('widens the frame of a text-only root by half the stroke', () => {
+    const plain = convert(text('T', 'Hi', { size: 20 })).report.frame;
+    const stroked = convert(text('T', 'Hi', { size: 20, style: { stroke } })).report.frame;
+    expect(stroked.x).toBeCloseTo(plain.x - 1.5);
+    expect(stroked.w).toBeCloseTo(plain.w + 3);
+  });
+
+  it('fills area text with a gradient over the frame of the text, in user space', () => {
+    const { svg } = withCard(
+      text('T', 'Hi', { frame: 'area', frameWidth: 200, frameHeight: 50, style: { fill: grad } }),
+    );
+    expect(svg).toMatch(
+      /<linearGradient id="grad-1" gradientUnits="userSpaceOnUse" [^>]*gradientTransform="matrix\(200 0 0 50 0 0\)"/,
+    );
+    expect(svg).toContain('fill="url(#grad-1)"');
+  });
+
+  it('paints a gradient on text the same gradient it would on a shape of that size', () => {
+    // area text of 200x50 against a 200x50 rect with the same gradient: same pixels where the text is
+    const { svg } = convert(
+      group('Root', [
+        rect('bg', 0, 0, 200, 50, { fill: solid(255, 255, 255) }),
+        text('T', 'MMMM', {
+          size: 40,
+          y: 0,
+          frame: 'area',
+          frameWidth: 200,
+          frameHeight: 50,
+          style: { fill: grad },
+        }),
+      ]),
+    );
+    const px = rasterize(svg, 200);
+    expect(px.alpha.length).toBeGreaterThan(0);
+    expect(validateStatic(svg)).toEqual([]);
+  });
+
+  it('keeps a solid-filled text on its own colour', () => {
+    expect(withCard(text('T', 'Hi', { fill: [1, 2, 3] })).svg).toContain('fill="rgb(1,2,3)"');
+  });
+
+  it('draws a script run smaller and shifted by baseline-shift', () => {
+    const sup = text('T', 'x2', {
+      size: 24,
+      ranges: [
+        {
+          length: 2,
+          fontFamily: 'F',
+          fontStyle: 'Regular',
+          fontSize: 24,
+          charSpacing: 0,
+          textScript: 'superscript',
+          fill: { value: 0xff000000 },
+        },
+      ],
+    });
+    const { svg } = withCard(sup);
+    expect(svg).toMatch(/font-size="13\.992"[^>]*baseline-shift="7\.992"/);
+  });
+});

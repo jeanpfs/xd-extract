@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Text strokes: a solid or gradient stroke on text is drawn on the `<text>` (colour, width, join, cap, dashes), centred; inside and outside alignment is reported as `stroke-align-ignored:*`. The frame grows by half the width. Seen once, in the tests-suite (solid, width 1); XD's own paint order was not checked.
+- Gradient fills on text: placed in user space over the text box (the frame for area text, where XD stores its height), so the gradient spans the same box XD measures it on. Never seen in real data, so it is reported (`text-gradient-unverified`), and it replaces the ranged colours. Image fills on text are still reported.
+- Superscript and subscript: smaller (58.3 %) and shifted (33.3 %, `baseline-shift`), with the width estimate at the smaller size. The values are the usual typographic ones, not measured in XD (`text-script-approximate:*`). Linear gradients can now carry a transform, like radial ones.
 - The width of left-aligned text (which XD does not store) is estimated from Helvetica advance widths instead of a flat 0.6 em per character: within about 1-3 % of Arial and Helvetica rendered by resvg for regular text, up to 8 % for bold, against about 30 % too wide before. A line of area text is capped at its frame width. Frames that used to leave an empty margin to the right of text now fit. XD's `visualBounds` turned out to be stored only on text that has a shadow or blur, in another coordinate space, so it cannot replace the estimate.
 
 ## 0.2.0 (2026-10-13)

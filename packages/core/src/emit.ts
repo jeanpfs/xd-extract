@@ -101,7 +101,15 @@ function gradientEl(id: string, g: Gradient): string {
   if (g.type === 'linear') {
     return el(
       'linearGradient',
-      { id, gradientUnits: g.units, x1: round(g.x1), y1: round(g.y1), x2: round(g.x2), y2: round(g.y2) },
+      {
+        id,
+        gradientUnits: g.units,
+        x1: round(g.x1),
+        y1: round(g.y1),
+        x2: round(g.x2),
+        y2: round(g.y2),
+        gradientTransform: g.transform ? matrixAttr(g.transform) : undefined,
+      },
       stops,
     );
   }
@@ -317,8 +325,24 @@ export function emitSvg(root: IrNode, frameResult: FrameResult): EmitResult {
     return id;
   };
 
+  /**
+   * A gradient on text is measured against XD's text box, not against the `<text>` the renderer sees, so
+   * it is placed in user space with the same box: unit coordinates scaled and moved onto it.
+   */
+  const textPaint = (p: Paint | undefined, box: IrText['box']): Paint | undefined => {
+    if (p?.kind !== 'gradient' || p.def.units !== 'objectBoundingBox') return p;
+    const onBox: Matrix = [box.x1 - box.x0, 0, 0, box.y1 - box.y0, box.x0, box.y0];
+    return {
+      kind: 'gradient',
+      def: { ...p.def, units: 'userSpaceOnUse', transform: mul(onBox, p.def.transform ?? IDENTITY) },
+    };
+  };
+
   const textSvg = (n: IrText, isRoot: boolean): string => {
     const attrs: Attrs = {};
+    const strokeCss = n.stroke ? paintCss(textPaint(n.stroke.paint, n.box) ?? null) : undefined;
+    if (n.stroke && strokeCss) strokeAttrs(attrs, n.stroke, 1, strokeCss);
+    const fillCss = n.fill ? paintCss(textPaint(n.fill, n.box) ?? null) : undefined;
     if (!isRoot && !isIdentity(n.transform)) attrs.transform = matrixAttr(n.transform);
     if (!isRoot && n.opacity !== 1) attrs.opacity = round(n.opacity);
     attrs['xml:space'] = 'preserve';
@@ -342,7 +366,8 @@ export function emitSvg(root: IrNode, frameResult: FrameResult): EmitResult {
                 'font-weight': r.weight,
                 'font-style': r.italic ? 'italic' : undefined,
                 'letter-spacing': r.letterSpacing ? round(r.letterSpacing) : undefined,
-                fill: r.fill ?? 'none',
+                fill: fillCss ?? r.fill ?? 'none',
+                'baseline-shift': r.baseShift,
                 'text-decoration': r.decoration,
               },
               escText(r.text),

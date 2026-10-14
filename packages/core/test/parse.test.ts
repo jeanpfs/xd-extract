@@ -554,16 +554,6 @@ describe('text', () => {
     expect(codes(r)).toContain('unsupported-text:frame-weird');
   });
 
-  it('reports a text stroke and a gradient fill as missing art', () => {
-    const stroke = { type: 'solid', color: solid(0, 0, 0).color, width: 1 };
-    expect(codes(parse(text('T', 'abc', { style: { stroke } })))).toContain('unsupported-stroke:text');
-    const noRange = text('T', 'abc', { style: { fill: { type: 'gradient' } } });
-    noRange.meta = { ux: {} };
-    const r = parse(noRange);
-    expect(codes(r)).toContain('unsupported-fill:gradient');
-    expect(t(r).lines[0]!.runs[0]!.fill).toBeNull();
-  });
-
   it('anchors area and autoHeight text by the frame, since their x is an offset inside it', () => {
     // centred in a 200 wide frame, line 41.5 wide: x = (200 - 41.5) / 2
     const area = parse(text('T', 'abcd', { align: 'center', xs: [79.25], frame: 'area', frameWidth: 200 }));
@@ -615,8 +605,6 @@ describe('text', () => {
     expect(run({ strikethrough: true }).decoration).toBe('line-through');
     expect(run({ underline: true, strikethrough: true }).decoration).toBe('underline line-through');
     expect(run({ underline: false }).decoration).toBeUndefined();
-    const sup = parse(text('T', 'x', { ranges: [range({ length: 1, textScript: 'superscript' })] }));
-    expect(codes(sup)).toContain('text-script-unsupported:superscript');
   });
 
   it('reads a shadow on a text node', () => {
@@ -1040,19 +1028,6 @@ describe('gradients', () => {
     expect((r.node as IrShape).stroke?.paint.kind).toBe('gradient');
     expect(r.warnings).toEqual([]);
   });
-
-  it('still reports a gradient on text as missing art', () => {
-    const t = text('T', 'abc', {
-      style: {
-        fill: gradientFill('linear', [
-          [0, red],
-          [1, blue],
-        ]),
-      },
-    });
-    t.meta = { ux: {} };
-    expect(only(parseAgc(agcDoc([t]))).warnings.map((w) => w.code)).toContain('unsupported-fill:gradient');
-  });
 });
 
 describe('image fills', () => {
@@ -1212,5 +1187,122 @@ describe('object blur', () => {
     expect((r.node as IrShape).shadows).toHaveLength(1);
     expect((r.node as IrShape).blur).toBe(5);
     expect(codes(r)).toEqual([]);
+  });
+});
+
+describe('text stroke, gradient fill and scripts', () => {
+  const t = (r: ReturnType<typeof only>) => r.node as IrText;
+  const parse1 = (n: ReturnType<typeof text>) => only(parseAgc(agcDoc([n])));
+  const codes = (r: { warnings: { code: string }[] }) => r.warnings.map((w) => w.code);
+  const black = solid(0, 0, 0);
+  const red = [255, 0, 0] as [number, number, number];
+  const blue = [0, 0, 255] as [number, number, number];
+  const grad = gradientFill('linear', [
+    [0, red],
+    [1, blue],
+  ]);
+  const range = (over: object) => ({
+    length: 5,
+    fontFamily: 'F',
+    fontStyle: 'Regular',
+    fontSize: 10,
+    charSpacing: 0,
+    fill: { value: argb([1, 1, 1]) },
+    ...over,
+  });
+  const noRanges = (n: ReturnType<typeof text>) => {
+    n.meta = { ux: {} };
+    return n;
+  };
+
+  it('reads a solid stroke on text, without a warning', () => {
+    const r = parse1(text('T', 'abc', { style: { stroke: { ...black, width: 3, align: 'center' } } }));
+    expect(t(r).stroke).toMatchObject({ paint: { kind: 'solid', css: 'rgb(0,0,0)' }, width: 3 });
+    expect(codes(r)).toEqual(['text-font-not-embedded:Poppins', 'text-bbox-approximate']);
+  });
+
+  it('draws inside and outside strokes on text centred, and says so', () => {
+    const r = parse1(text('T', 'abc', { style: { stroke: { ...black, width: 3, align: 'inside' } } }));
+    expect(codes(r)).toContain('stroke-align-ignored:inside');
+    expect(t(r).stroke).toBeDefined();
+  });
+
+  it('grows the box of the text by half the stroke on every side', () => {
+    const extent = (n: ReturnType<typeof text>) => {
+      const pts = t(parse1(n)).pts;
+      const xs = pts.map((p) => p[0]);
+      const ys = pts.map((p) => p[1]);
+      return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+    };
+    const plain = extent(text('T', 'abc', { size: 20 }));
+    const stroked = extent(text('T', 'abc', { size: 20, style: { stroke: { ...black, width: 4 } } }));
+    expect(stroked).toEqual([plain[0]! - 2, plain[1]! - 2, plain[2]! + 2, plain[3]! + 2]);
+  });
+
+  it('still reports a stroke it cannot read, and an image stroke', () => {
+    const r = parse1(text('T', 'abc', { style: { stroke: { type: 'pattern', width: 2 } } }));
+    expect(codes(r)).toContain('unsupported-stroke:pattern');
+    expect(t(r).stroke).toBeUndefined();
+  });
+
+  it('reads a gradient fill of the node, which wins over the ranged colours, and flags it as unverified', () => {
+    const r = parse1(text('T', 'abc', { style: { fill: grad } }));
+    expect(t(r).fill).toMatchObject({ kind: 'gradient', def: { type: 'linear' } });
+    expect(t(r).lines[0]!.runs[0]!.fill).toBeNull();
+    expect(codes(r)).toContain('text-gradient-unverified');
+    expect(codes(r)).not.toContain('unsupported-fill:gradient');
+  });
+
+  it('reads a gradient on text that has no ranged styles', () => {
+    const r = parse1(noRanges(text('T', 'abc', { style: { fill: grad } })));
+    expect(t(r).fill?.kind).toBe('gradient');
+    expect(t(r).lines[0]!.runs[0]!.fill).toBeNull();
+  });
+
+  it('keeps the gradient out of the way when the node fill is plain', () => {
+    expect(t(parse1(text('T', 'abc'))).fill).toBeUndefined();
+  });
+
+  it('reports an image fill on text as missing art', () => {
+    const r = parse1(noRanges(text('T', 'abc', { style: { fill: patternFill('u1') } })));
+    expect(codes(r)).toContain('unsupported-fill:pattern');
+    expect(t(r).fill).toBeUndefined();
+  });
+
+  it('measures the gradient box: the frame of area text, the text box otherwise', () => {
+    const area = t(parse1(text('T', 'abc', { frame: 'area', frameWidth: 200, frameHeight: 60 })));
+    expect(area.box).toEqual({ x0: 0, y0: 0, x1: 200, y1: 60 });
+    const pos = t(parse1(text('T', 'abc', { size: 20 })));
+    expect(pos.box.x0).toBe(0);
+    expect(pos.box.x1).toBeGreaterThan(20);
+  });
+
+  it('draws a superscript smaller and raised, a subscript smaller and lowered, and flags the guess', () => {
+    const run = (textScript: string) => {
+      const n = text('T', 'x2', { size: 24, ranges: [range({ length: 2, fontSize: 24, textScript })] });
+      const r = parse1(n);
+      return { run: t(r).lines[0]!.runs[0]!, codes: codes(r) };
+    };
+    const sup = run('superscript');
+    expect(sup.run.size).toBeCloseTo(24 * 0.583, 2);
+    expect(sup.run.baseShift).toBeCloseTo(24 * 0.333, 2);
+    expect(sup.codes).toContain('text-script-approximate:superscript');
+    const sub = run('subscript');
+    expect(sub.run.baseShift).toBeCloseTo(-24 * 0.333, 2);
+    expect(sub.codes).toContain('text-script-approximate:subscript');
+    expect(run('none').run.baseShift).toBeUndefined();
+  });
+
+  it('estimates the width of a script run at its smaller size', () => {
+    const wide = t(parse1(text('T', 'mmmm', { size: 20 }))).pts[1]![0];
+    const sup = t(
+      parse1(
+        text('T', 'mmmm', {
+          size: 20,
+          ranges: [range({ length: 4, fontSize: 20, textScript: 'superscript' })],
+        }),
+      ),
+    ).pts[1]![0];
+    expect(sup / wide).toBeCloseTo(0.583, 2);
   });
 });

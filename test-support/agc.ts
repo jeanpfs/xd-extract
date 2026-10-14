@@ -76,6 +76,7 @@ export interface TextOpts {
   ranges?: AgcTextRange[];
   frame?: string;
   frameWidth?: number;
+  frameHeight?: number;
   style?: AgcStyle;
 }
 
@@ -118,6 +119,7 @@ export const text = (name: string, raw: string, o: TextOpts = {}): AgcNode => {
       frame: {
         type: o.frame ?? 'positioned',
         ...(o.frameWidth !== undefined ? { width: o.frameWidth } : {}),
+        ...(o.frameHeight !== undefined ? { height: o.frameHeight } : {}),
       },
       paragraphs,
       rawText: raw,

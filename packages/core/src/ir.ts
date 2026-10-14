@@ -18,6 +18,8 @@ export type Gradient =
       y1: number;
       x2: number;
       y2: number;
+      /** In the same units as the geometry. */
+      transform?: Matrix;
       stops: GradientStop[];
     }
   | {
@@ -132,6 +134,8 @@ export interface IrTextRun {
   fill: string | null;
   /** CSS text-decoration value; undefined: none. */
   decoration?: string;
+  /** Superscript or subscript: baseline shift in user units, positive up. `size` is already the smaller size. */
+  baseShift?: number;
 }
 
 /** One laid-out line: XD's own wrapping, `x`/`y` as XD stored them (baseline, node coordinates). */
@@ -156,8 +160,13 @@ export interface IrText {
   /** Object blur: the standard deviation of a Gaussian, in the node's units. */
   blur?: number;
   align: 'left' | 'center' | 'right';
+  /** A gradient fill of the whole node; it replaces the colour of every run. */
+  fill?: Paint;
+  stroke?: Stroke;
+  /** The box a gradient on this text is measured against: XD's frame for area text, else the text box. */
+  box: { x0: number; y0: number; x1: number; y1: number };
   lines: IrTextLine[];
-  /** Local-space corners of the (partly estimated) text box, for the frame. */
+  /** Local-space corners of the (partly estimated) text box, stroke included, for the frame. */
   pts: Point[];
 }
 

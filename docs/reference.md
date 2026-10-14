@@ -49,8 +49,9 @@ Every extraction records warnings in the report (`<file>.svg.report.json`) and p
 | `text-align-unsupported:<value>` | no | Paragraph alignment other than left, centre, right; drawn left |
 | `text-letter-spacing-unverified` | no | A non-zero `charSpacing`, read as 1/1000 em (never observed) |
 | `unsupported-text:frame-<type>` | no | A text frame other than `positioned`, `area` or `autoHeight` (never observed); the stored lines are used as they are |
-| `text-script-unsupported:<v>` | no | Superscript or subscript text is drawn at normal size and position |
-| `unsupported-stroke:text` | yes | A stroke on text is not converted |
+| `text-script-approximate:<v>` | no | Superscript or subscript is drawn at 58.3 % of the size and shifted 33.3 % of it (`baseline-shift`); XD's own values were never measured |
+| `text-script-unsupported:<v>` | no | Any other `textScript` value is drawn at normal size and position |
+| `text-gradient-unverified` | no | A gradient fill on text was never seen in real data: it is drawn over the text frame (area text) or the text box, and replaces the ranged colours |
 | `skipped-text` | no | A text node without a readable layout is skipped |
 | `unsupported-style:filters:uxdesign#blur-background` | no | A background blur needs the pixels behind the shape; not drawn |
 | `unsupported-style:filters:uxdesign#blur-local` | no | A blur without `global: true` is not converted |

@@ -577,6 +577,9 @@ function parseGroup(n: AgcNode, inh: Inherited, w: Scope): IrGroup {
   };
 }
 
+/** Superscript and subscript: the size of the run, and how far it moves, as fractions of the font size. */
+const SCRIPT_SIZE = 0.583;
+const SCRIPT_SHIFT = 0.333;
 const ASCENT = 0.8;
 const DESCENT = 0.25;
 
@@ -619,16 +622,27 @@ function parseText(n: AgcNode, w: Scope): IrText | null {
     );
   }
   const frameWidth = typeof t.frame?.width === 'number' ? t.frame.width : undefined;
-  const strokeType = st.stroke?.type;
-  if (strokeType && strokeType !== 'none') {
-    w.add('unsupported-stroke:text', 'a stroke on text is not converted', name);
-  }
+  const declaredStroke = readPaint(st.stroke, 'stroke', w, name);
+  const stroke: Stroke | undefined =
+    declaredStroke && declaredStroke.kind !== 'unsupported'
+      ? { paint: declaredStroke, width: st.stroke?.width, ...strokeExtras(st.stroke) }
+      : undefined;
+  const strokeAlign = st.stroke?.align;
+  if (stroke && strokeAlign && strokeAlign !== 'center') warnAlign(strokeAlign, name, w);
 
   // Style per character range. Without ranged styles, the node's own font and fill apply to everything.
   const nodeFill = readPaint(st.fill, 'fill', w, name);
-  if (nodeFill?.kind === 'gradient' || nodeFill?.kind === 'image') {
-    const what = nodeFill.kind === 'image' ? 'pattern' : 'gradient';
-    w.add(`unsupported-fill:${what}`, `a ${what} fill on text is not converted`, name);
+  if (nodeFill?.kind === 'image') {
+    w.add('unsupported-fill:pattern', 'an image fill on text is not converted', name);
+  }
+  // Never seen on real data: the ranged colour XD writes next to a gradient is unknown, so the gradient wins.
+  const gradientFill = nodeFill?.kind === 'gradient' ? nodeFill : undefined;
+  if (gradientFill) {
+    w.add(
+      'text-gradient-unverified',
+      'a gradient fill on text was never observed in real data; it is drawn over the text frame',
+      name,
+    );
   }
   const nodeFillCss = nodeFill?.kind === 'solid' ? nodeFill.css : null;
   const ranges: (AgcTextRange & { end: number })[] = [];
@@ -655,7 +669,7 @@ function parseText(n: AgcNode, w: Scope): IrText | null {
   const known = new Set<string>();
   const runOf = (text: string, r: AgcTextRange): IrTextRun => {
     const family = r.fontFamily ?? st.font?.family ?? 'sans-serif';
-    const size = r.fontSize ?? st.font?.size ?? 16;
+    const fontSize = r.fontSize ?? st.font?.size ?? 16;
     const { weight, italic } = fontStyleOf(r.fontStyle ?? st.font?.style);
     if (weight === undefined) {
       later(
@@ -679,19 +693,31 @@ function parseText(n: AgcNode, w: Scope): IrText | null {
         name,
       );
     }
-    const fill = r.fill?.value !== undefined ? argbCss(r.fill.value) : nodeFillCss;
+    const fill = gradientFill ? null : r.fill?.value !== undefined ? argbCss(r.fill.value) : nodeFillCss;
+    // XD's own size and shift for scripts were never measured: the usual typographic values are used.
+    const script = r.textScript === 'superscript' ? 1 : r.textScript === 'subscript' ? -1 : 0;
+    const size = script ? fontSize * SCRIPT_SIZE : fontSize;
     if (r.textScript && r.textScript !== 'none') {
-      later(
-        `text-script-unsupported:${r.textScript}`,
-        `text script "${r.textScript}" is drawn at normal size`,
-        name,
-      );
+      if (script) {
+        later(
+          `text-script-approximate:${r.textScript}`,
+          `${r.textScript} is drawn at ${round(SCRIPT_SIZE * 100)}% size and shifted ${round(SCRIPT_SHIFT * 100)}% of the size; XD's own values were never measured`,
+          name,
+        );
+      } else {
+        later(
+          `text-script-unsupported:${r.textScript}`,
+          `text script "${r.textScript}" is drawn at normal size`,
+          name,
+        );
+      }
     }
     const decoration = [r.underline ? 'underline' : '', r.strikethrough ? 'line-through' : '']
       .filter(Boolean)
       .join(' ');
     return {
       ...(decoration ? { decoration } : {}),
+      ...(script ? { baseShift: round(script * SCRIPT_SHIFT * fontSize) } : {}),
       text: applyTransform(text, r.textTransform),
       family,
       weight: weight ?? 400,
@@ -780,6 +806,18 @@ function parseText(n: AgcNode, w: Scope): IrText | null {
       [x0, l.y + size * DESCENT],
     );
   }
+  // What a gradient is measured against: XD's frame for area text (its height is stored), else the text box.
+  const frameHeight = typeof t.frame?.height === 'number' ? t.frame.height : undefined;
+  const xs = pts.map((p) => p[0]);
+  const ys = pts.map((p) => p[1]);
+  const textBox = { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
+  const box =
+    frameType === 'area' && frameWidth !== undefined && frameHeight !== undefined
+      ? { x0: 0, y0: 0, x1: frameWidth, y1: frameHeight }
+      : textBox;
+  // A stroke is centred on the outline, so it reaches half its width past the text.
+  const reach = stroke?.width !== undefined && stroke.paint.kind !== 'unsupported' ? stroke.width / 2 : 0;
+  if (reach) pts.push([textBox.x0 - reach, textBox.y0 - reach], [textBox.x1 + reach, textBox.y1 + reach]);
   if (guessed) {
     w.add(
       'text-bbox-approximate',
@@ -795,6 +833,9 @@ function parseText(n: AgcNode, w: Scope): IrText | null {
     transform: transformOf(n.transform),
     opacity: st.opacity ?? 1,
     shadows,
+    ...(gradientFill ? { fill: gradientFill } : {}),
+    ...(stroke ? { stroke } : {}),
+    box,
     ...(objectBlur ? { blur: objectBlur } : {}),
     ...(blend ? { blend } : {}),
     align,
