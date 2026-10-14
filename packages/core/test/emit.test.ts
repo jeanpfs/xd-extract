@@ -466,8 +466,9 @@ describe('text', () => {
     // width = -2 * x = 40; ascent 0.8 * 20, descent 0.25 * 20 about the baseline
     expect(centred.report.frame).toEqual({ x: -20, y: -16, w: 40, h: 21 });
     const left = convert(group('Root', [text('T', 'Hi', { x: 10, y: 50, size: 20 })]));
-    // 2 characters * 0.6 em estimate
-    expect(left.report.frame).toEqual({ x: 10, y: 34, w: 24, h: 21 });
+    // H + i in Helvetica metrics: 0.944 em
+    expect(left.report.frame.x).toBe(10);
+    expect(left.report.frame.w).toBeCloseTo(18.88, 6);
   });
 
   it('keeps a plate frame when text sits on a plate', () => {

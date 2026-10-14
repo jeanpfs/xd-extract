@@ -587,6 +587,14 @@ describe('text', () => {
     expect(t(r).pts[1]![0]).toBeCloseTo(120.75);
   });
 
+  it('never lets an estimated line run past the width of its area frame', () => {
+    const long = 'm'.repeat(40);
+    const r = parse(text('T', long, { xs: [5], frame: 'area', frameWidth: 100 }));
+    expect(t(r).pts[1]![0]).toBe(100);
+    const open = parse(text('T', long, { xs: [5], size: 10 }));
+    expect(t(open).pts[1]![0]).toBeGreaterThan(100);
+  });
+
   it('applies textTransform and carries underline and strikethrough', () => {
     const range = (over: object) => ({
       length: 5,

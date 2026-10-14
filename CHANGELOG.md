@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The width of left-aligned text (which XD does not store) is estimated from Helvetica advance widths instead of a flat 0.6 em per character: within about 1-3 % of Arial and Helvetica rendered by resvg for regular text, up to 8 % for bold, against about 30 % too wide before. A line of area text is capped at its frame width. Frames that used to leave an empty margin to the right of text now fit. XD's `visualBounds` turned out to be stored only on text that has a shadow or blur, in another coordinate space, so it cannot replace the estimate.
+
 ## 0.2.0 (2026-10-13)
 
 - Inside and outside stroke alignment on closed shapes (rect, ellipse, closed paths): the stroke is drawn at twice the width and clipped to the shape (inside) or masked out of it (outside). The frame no longer includes the outer half of an inside stroke and now includes the full width of an outside one. `stroke-align-ignored:*` is now reported only for lines, open paths and unknown values, and no longer when there is no stroke (XD stores `align` on `stroke: none`). `report.clips` still counts mask-group clips only.

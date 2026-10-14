@@ -30,6 +30,7 @@ import type {
   Stroke,
 } from './ir';
 import { IDENTITY, type Matrix, round } from './matrix';
+import { estimateWidth } from './metrics';
 import { buildSyncIndex, expandSync, type SyncIndex } from './sync';
 import { type Warning, WarningCollector } from './warnings';
 
@@ -576,8 +577,6 @@ function parseGroup(n: AgcNode, inh: Inherited, w: Scope): IrGroup {
   };
 }
 
-/** Width guess per character, in em, for text whose width XD does not store (left-aligned). */
-const EM_WIDTH = 0.6;
 const ASCENT = 0.8;
 const DESCENT = 0.25;
 
@@ -749,7 +748,10 @@ function parseText(n: AgcNode, w: Scope): IrText | null {
   for (const l of lines) {
     const size = Math.max(...l.runs.map((r) => r.size));
     const chars = l.runs.reduce((sum, r) => sum + [...r.text].length, 0);
-    const estimate = l.runs.reduce((sum, r) => sum + [...r.text].length * r.size * EM_WIDTH, 0);
+    const estimate = l.runs.reduce(
+      (sum, r) => sum + estimateWidth(r.text, r.size, r.weight, r.letterSpacing),
+      0,
+    );
     let x0: number;
     let x1: number;
     if (align !== 'left' && l.x < 0) {
@@ -767,7 +769,9 @@ function parseText(n: AgcNode, w: Scope): IrText | null {
       l.anchor = 'start';
       guessed = guessed || chars > 0;
       x0 = l.x;
-      x1 = l.x + estimate;
+      // area text wraps inside its frame, so a line is never wider than the frame
+      x1 =
+        frameWidth !== undefined && l.x < frameWidth ? Math.min(l.x + estimate, frameWidth) : l.x + estimate;
     }
     pts.push(
       [x0, l.y - size * ASCENT],
@@ -779,7 +783,7 @@ function parseText(n: AgcNode, w: Scope): IrText | null {
   if (guessed) {
     w.add(
       'text-bbox-approximate',
-      'a text line width is estimated (0.6 em per character); the frame may be off',
+      'a text line width is estimated from generic sans-serif metrics; the frame may be off',
       name,
     );
   }

@@ -44,7 +44,7 @@ Every extraction records warnings in the report (`<file>.svg.report.json`) and p
 | `unsupported-style:blendMode:<mode>` | no | A blend mode that is not a CSS one; the node is drawn normally |
 | `unsupported-node:<type>` | yes | Node type not converted. For `syncRef` (a symbol instance): its master was not found in the document, so the instance is dropped; a share link whose resources component could not be fetched is the usual cause |
 | `text-font-not-embedded:<family>` | no | Text is live `<text>`; the viewer needs this font or substitutes one |
-| `text-bbox-approximate` | no | A left-aligned line's width is not stored by XD and is estimated (0.6 em per character) for the frame |
+| `text-bbox-approximate` | no | A left-aligned line's width is not stored by XD and is estimated from Helvetica/Arial advance widths (0.6 em for other characters, 1 em for CJK; within a few percent for Arial, further for other fonts) and capped at the frame width of area text |
 | `text-font-style-unknown` | no | A font style name that is not a known weight; 400 is used |
 | `text-align-unsupported:<value>` | no | Paragraph alignment other than left, centre, right; drawn left |
 | `text-letter-spacing-unverified` | no | A non-zero `charSpacing`, read as 1/1000 em (never observed) |

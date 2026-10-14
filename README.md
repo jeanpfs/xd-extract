@@ -38,11 +38,11 @@ Artboard – 1 | Market watch | group | 394,4688.6 1180x513.4 | rgb(255,255,255)
 $ xd extract design.xd --node "Sign Up form" -o out/sign-up.svg
 out/sign-up.svg  viewBox="1174 363.8 372 304.2" rule=content snaps=0 clips=0 warnings=2
   warning text-font-not-embedded:Poppins (5x): font "Poppins" is not embedded: the SVG renders with whatever the viewer has
-  warning text-bbox-approximate (5x): a text line width is estimated (0.6 em per character); the frame may be off
+  warning text-bbox-approximate (5x): a text line width is estimated from generic sans-serif metrics; the frame may be off
 
 $ xd validate out/sign-up.svg
 out/sign-up.svg: warn extraction:text-font-not-embedded:Poppins: font "Poppins" is not embedded: the SVG renders with whatever the viewer has (5x, e.g. "Read our Regulatory Compilances")
-out/sign-up.svg: warn extraction:text-bbox-approximate: a text line width is estimated (0.6 em per character); the frame may be off (5x, e.g. "Read our Regulatory Compilances")
+out/sign-up.svg: warn extraction:text-bbox-approximate: a text line width is estimated from generic sans-serif metrics; the frame may be off (5x, e.g. "Read our Regulatory Compilances")
 out/sign-up.svg: warn text-not-rasterized: text is not rasterized during validation (fonts are not loaded): the raster checks ignore it
 1 file(s): 0 error(s), 3 warning(s)
 ```
