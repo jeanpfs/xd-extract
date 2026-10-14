@@ -129,6 +129,10 @@ pnpm lint && pnpm typecheck && pnpm leakcheck && pnpm skills:check
 
 Tests come in tiers: a synthetic fixture per rule, three public fixtures (anonymised: `single.xd`, plus Adobe's XD-to-Flutter test suite and example app; see [fixtures/public/NOTICE](https://github.com/jeanpfs/xd-extract/blob/main/fixtures/public/NOTICE)), recorded HTTP (tokens stripped), a live check against the Adobe sample (`pnpm test:live`, nightly), and a private tier driven by `XD_PRIVATE_FIXTURE_DIR` that never leaves your machine. Contributor and agent notes are in [AGENTS.md](https://github.com/jeanpfs/xd-extract/blob/main/AGENTS.md).
 
+## Contributing and security
+
+See [CONTRIBUTING.md](https://github.com/jeanpfs/xd-extract/blob/main/CONTRIBUTING.md) and the [Code of Conduct](https://github.com/jeanpfs/xd-extract/blob/main/CODE_OF_CONDUCT.md). Report vulnerabilities privately, as described in [SECURITY.md](https://github.com/jeanpfs/xd-extract/blob/main/SECURITY.md).
+
 ## License
 
 MIT. Third-party sample material: see [NOTICE](https://github.com/jeanpfs/xd-extract/blob/main/NOTICE).
