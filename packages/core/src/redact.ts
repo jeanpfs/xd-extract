@@ -21,6 +21,7 @@ const KEEP_KEYS = new Set([
   'textTransform',
   'textScript',
   'blendMode',
+  'units',
 ]);
 // `syncSourceGuid` names another node's `id`, so both must map to the same token
 const ID_KEYS = new Set(['id', 'ref', 'symbolId', 'syncSourceGuid', 'guid']);

@@ -1,6 +1,6 @@
 import { genericFamily, quoteFamily } from './font';
 import { boxOf, collectPaintFacts, type FrameResult } from './frame';
-import type { Geom, IrGroup, IrNode, IrShape, IrText, Stroke } from './ir';
+import type { Geom, Gradient, IrGroup, IrNode, IrShape, IrText, Paint, Stroke } from './ir';
 import { IDENTITY, isIdentity, type Matrix, matrixAttr, mul, round, translate } from './matrix';
 import { shadowBox } from './shadow';
 
@@ -64,8 +64,41 @@ const escText = (v: string) =>
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
-function strokeAttrs(out: Attrs, s: Stroke, widthFactor: number): void {
-  out.stroke = (s.paint as { css: string }).css;
+function gradientEl(id: string, g: Gradient): string {
+  const stops = g.stops
+    .map((s) =>
+      el('stop', {
+        offset: round(s.offset),
+        'stop-color': s.color,
+        'stop-opacity': s.opacity < 1 ? round(s.opacity) : undefined,
+      }),
+    )
+    .join('');
+  if (g.type === 'linear') {
+    return el(
+      'linearGradient',
+      { id, gradientUnits: g.units, x1: round(g.x1), y1: round(g.y1), x2: round(g.x2), y2: round(g.y2) },
+      stops,
+    );
+  }
+  return el(
+    'radialGradient',
+    {
+      id,
+      gradientUnits: g.units,
+      cx: round(g.cx),
+      cy: round(g.cy),
+      r: round(g.r),
+      fx: round(g.fx),
+      fy: round(g.fy),
+      gradientTransform: g.transform ? matrixAttr(g.transform) : undefined,
+    },
+    stops,
+  );
+}
+
+function strokeAttrs(out: Attrs, s: Stroke, widthFactor: number, css: string): void {
+  out.stroke = css;
   if (s.width !== undefined || widthFactor !== 1) out['stroke-width'] = round((s.width ?? 1) * widthFactor);
   if (s.cap) out['stroke-linecap'] = s.cap;
   if (s.join) out['stroke-linejoin'] = s.join;
@@ -91,11 +124,28 @@ export function emitSvg(root: IrNode, frameResult: FrameResult): EmitResult {
   let clipSeq = 0;
   let alignSeq = 0;
   let shadowSeq = 0;
+  const gradientIds = new Map<string, string>();
+
+  /** The SVG value for a paint, registering a gradient definition once per distinct gradient. */
+  const paintCss = (p: Paint | null): string | undefined => {
+    if (!p) return undefined;
+    if (p.kind === 'solid') return p.css;
+    if (p.kind === 'unsupported') return undefined;
+    const key = JSON.stringify(p.def);
+    let id = gradientIds.get(key);
+    if (!id) {
+      id = `grad-${gradientIds.size + 1}`;
+      gradientIds.set(key, id);
+      defs.push(gradientEl(id, p.def));
+    }
+    return `url(#${id})`;
+  };
 
   const shapeSvg = (n: IrShape, isRoot: boolean): string => {
     const { tag, attrs } = geomEl(n.geom, false);
     const s = n.stroke;
-    const solidStroke = s && s.paint.kind === 'solid' ? s : null;
+    const strokeCss = s ? paintCss(s.paint) : undefined;
+    const solidStroke = s && strokeCss ? s : null;
     const aligned = solidStroke?.align ? solidStroke : null;
     // The frame is measured in the root's own coordinates (its transform is ignored), exactly as for a
     // root group, so a root shape must not apply its transform here or it lands outside the viewBox.
@@ -108,8 +158,8 @@ export function emitSvg(root: IrNode, frameResult: FrameResult): EmitResult {
     const style = n.blend ? `mix-blend-mode:${n.blend}` : undefined;
     const wrapped = !!filter || !!aligned;
     if (!wrapped) out.transform = transform;
-    out.fill = n.fill?.kind === 'solid' ? n.fill.css : 'none'; // stroke-only paths must not inherit SVG's black
-    if (solidStroke && !aligned) strokeAttrs(out, solidStroke, 1);
+    out.fill = paintCss(n.fill) ?? 'none'; // stroke-only paths must not inherit SVG's black
+    if (solidStroke && !aligned) strokeAttrs(out, solidStroke, 1, strokeCss as string);
     if (!aligned) {
       if (!filter) return el(tag, { ...out, opacity, style });
       return el('g', { transform, opacity, filter, style }, el(tag, out));
@@ -120,7 +170,7 @@ export function emitSvg(root: IrNode, frameResult: FrameResult): EmitResult {
     const stroke = solidStroke as Stroke;
     const key = ++alignSeq;
     const sa: Attrs = { ...attrs, fill: 'none' };
-    strokeAttrs(sa, stroke, 2);
+    strokeAttrs(sa, stroke, 2, strokeCss as string);
     if (stroke.align === 'inside') {
       const c = geomEl(n.geom, true);
       const id = `stroke-clip-${key}`;

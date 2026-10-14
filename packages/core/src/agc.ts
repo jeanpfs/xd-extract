@@ -9,8 +9,42 @@ export interface AgcTransform {
   ty: number;
 }
 
+export interface AgcGradientStop {
+  offset?: number;
+  color?: AgcColor;
+}
+
+/** Stops and type, inline under `gradient.meta.ux.gradientResources` or shared in `resources.gradients[ref]`. */
+export interface AgcGradientResource {
+  type?: string;
+  stops?: AgcGradientStop[];
+  /** angular */
+  x?: number;
+  y?: number;
+  rotation?: number;
+}
+
+export interface AgcGradient {
+  units?: string;
+  /** linear */
+  x1?: number;
+  y1?: number;
+  x2?: number;
+  y2?: number;
+  /** radial */
+  cx?: number;
+  cy?: number;
+  fx?: number;
+  fy?: number;
+  r?: number;
+  transform?: AgcTransform;
+  ref?: string;
+  meta?: { ux?: { gradientResources?: AgcGradientResource } };
+}
+
 export interface AgcPaint {
   type?: string;
+  gradient?: AgcGradient;
   color?: AgcColor;
   width?: number;
   align?: string;
@@ -112,5 +146,8 @@ export interface AgcDocument {
   version?: string;
   children?: AgcNode[];
   /** Only the resources document has this: symbol masters and shared gradients. */
-  resources?: { meta?: { ux?: { symbols?: AgcNode[] } }; gradients?: Record<string, unknown> };
+  resources?: {
+    meta?: { ux?: { symbols?: AgcNode[] } };
+    gradients?: Record<string, AgcGradientResource>;
+  };
 }

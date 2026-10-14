@@ -1,9 +1,20 @@
-import type { AgcDocument, AgcNode, AgcPaint, AgcShape, AgcStyle, AgcTextRange, AgcTransform } from './agc';
+import type {
+  AgcDocument,
+  AgcGradient,
+  AgcGradientResource,
+  AgcNode,
+  AgcPaint,
+  AgcShape,
+  AgcStyle,
+  AgcTextRange,
+  AgcTransform,
+} from './agc';
 import { type AgcColor, solidCss } from './color';
 import { XdError } from './errors';
 import { fontStyleOf } from './font';
 import type {
   Geom,
+  GradientStop,
   IrClipShape,
   IrGroup,
   IrNode,
@@ -19,6 +30,13 @@ import type {
 import { IDENTITY, type Matrix, round } from './matrix';
 import { buildSyncIndex, expandSync, type SyncIndex } from './sync';
 import { type Warning, WarningCollector } from './warnings';
+
+/** Collects warnings for one root and carries the shared gradients its fills may refer to. */
+class Scope extends WarningCollector {
+  constructor(readonly gradients: Record<string, AgcGradientResource> = {}) {
+    super();
+  }
+}
 
 export interface ParsedRoot {
   node: IrNode;
@@ -40,12 +58,7 @@ const isHidden = (n: AgcNode): boolean => n.visible === false || n.style?.opacit
 /** undefined: not declared (inherit). null: explicitly none. */
 type Declared = Paint | null | undefined;
 
-function readPaint(
-  p: AgcPaint | undefined,
-  where: 'fill' | 'stroke',
-  w: WarningCollector,
-  name: string,
-): Declared {
+function readPaint(p: AgcPaint | undefined, where: 'fill' | 'stroke', w: Scope, name: string): Declared {
   if (!p) return undefined;
   if (p.type === 'none') return null;
   if (p.type === 'solid' && p.color) {
@@ -60,9 +73,93 @@ function readPaint(
     }
     return { kind: 'solid', css: solidCss(p.color) };
   }
+  if (p.type === 'gradient') return readGradient(p.gradient, where, w, name);
   const reason = p.type ?? 'unknown';
   w.add(`unsupported-${where}:${reason}`, `${where} of type "${reason}" is not converted yet`, name);
   return { kind: 'unsupported', reason };
+}
+
+/**
+ * XD writes a gradient as geometry plus a stops resource: inline (`meta.ux.gradientResources`) or shared
+ * in the resources document under `ref`. Linear and radial map to SVG as they are; angular cannot.
+ */
+function readGradient(g: AgcGradient | undefined, where: 'fill' | 'stroke', w: Scope, name: string): Paint {
+  const bad = (reason: string, message: string): Paint => {
+    w.add(`unsupported-${where}:${reason}`, message, name);
+    return { kind: 'unsupported', reason };
+  };
+  if (!g) return bad('gradient', `${where} gradient has no data`);
+  const res = g.ref !== undefined ? w.gradients[g.ref] : g.meta?.ux?.gradientResources;
+  if (!res) {
+    return bad(
+      'gradient',
+      g.ref !== undefined
+        ? `gradient "${g.ref}" is not in the resources document`
+        : `${where} gradient has no stops`,
+    );
+  }
+  if (res.type !== 'linear' && res.type !== 'radial') {
+    const type = res.type ?? 'unknown';
+    return bad(`gradient-${type}`, `${type} gradients have no SVG equivalent`);
+  }
+  const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+  const stops: GradientStop[] = [];
+  for (const st of res.stops ?? []) {
+    const c = st.color;
+    if (!c || !num(st.offset)) return bad('gradient', 'gradient has a stop without offset or colour');
+    if (c.mode && c.mode !== 'RGB') {
+      return bad(`color-mode-${c.mode}`, `${where} uses colour mode ${c.mode}; only RGB is converted`);
+    }
+    stops.push({ offset: st.offset, color: solidCss({ ...c, alpha: undefined }), opacity: c.alpha ?? 1 });
+  }
+  if (!stops.length) return bad('gradient', 'gradient has no stops');
+  const first = res.stops?.[0]?.color;
+  if (stops.length === 1 && first) return { kind: 'solid', css: solidCss(first) };
+  if (g.units !== undefined && g.units !== 'objectBoundingBox' && g.units !== 'userSpaceOnUse') {
+    return bad('gradient', `gradient units "${g.units}" are not known`);
+  }
+  const units = g.units === 'userSpaceOnUse' ? 'userSpaceOnUse' : 'objectBoundingBox';
+  if (res.type === 'linear') {
+    const { x1, y1, x2, y2 } = g;
+    if (!num(x1) || !num(y1) || !num(x2) || !num(y2))
+      return bad('gradient', 'linear gradient without geometry');
+    return { kind: 'gradient', def: { type: 'linear', units, x1, y1, x2, y2, stops } };
+  }
+  const { cx, cy, r } = g;
+  if (!num(cx) || !num(cy) || !num(r)) return bad('gradient', 'radial gradient without geometry');
+  const t = g.transform;
+  return {
+    kind: 'gradient',
+    def: {
+      type: 'radial',
+      units,
+      cx,
+      cy,
+      fx: num(g.fx) ? g.fx : cx,
+      fy: num(g.fy) ? g.fy : cy,
+      r,
+      ...(t ? { transform: transformOf(t) } : {}),
+      stops,
+    },
+  };
+}
+
+/** Bounding-box units mean nothing for a shape with no width or height: SVG would draw nothing. */
+function flattenDegenerate(p: Paint | null, geom: Geom, w: Scope, name: string): Paint | null {
+  if (p?.kind !== 'gradient' || p.def.units !== 'objectBoundingBox') return p;
+  const xs = geom.pts.map((q) => q[0]);
+  const ys = geom.pts.map((q) => q[1]);
+  if (Math.max(...xs) - Math.min(...xs) > 0 && Math.max(...ys) - Math.min(...ys) > 0) return p;
+  w.add(
+    'gradient-degenerate-bbox',
+    'a gradient on a shape with no width or height is drawn as its first stop colour',
+    name,
+  );
+  const s = p.def.stops[0] as GradientStop;
+  return {
+    kind: 'solid',
+    css: s.opacity < 1 ? s.color.replace('rgb(', 'rgba(').replace(')', `,${round(s.opacity)})`) : s.color,
+  };
 }
 
 /** CSS blend modes XD writes with the same name; `normal` and a group's `pass-through` draw as usual. */
@@ -84,7 +181,7 @@ const BLEND_MODES = new Set([
   'luminosity',
 ]);
 
-function readBlend(st: AgcStyle, name: string, w: WarningCollector): string | undefined {
+function readBlend(st: AgcStyle, name: string, w: Scope): string | undefined {
   const mode = st.blendMode;
   if (!mode || mode === 'normal' || mode === 'pass-through') return undefined;
   if (!BLEND_MODES.has(mode)) {
@@ -102,7 +199,7 @@ function readBlend(st: AgcStyle, name: string, w: WarningCollector): string | un
 const FILTERS_MSG = 'a style.filters entry could not be converted';
 
 /** Drop shadows become IR; every other filter, and any shadow we cannot read exactly, is reported. */
-function readShadows(st: AgcStyle, name: string, w: WarningCollector): Shadow[] {
+function readShadows(st: AgcStyle, name: string, w: Scope): Shadow[] {
   const filters = st.filters;
   if (!filters || (Array.isArray(filters) && filters.length === 0)) return [];
   if (!Array.isArray(filters)) {
@@ -149,12 +246,12 @@ function readShadow(raw: unknown): Shadow | null {
   return { dx: s.dx, dy: s.dy, r: s.r, color: solidCss({ ...c, alpha: undefined }), opacity: a ?? 1 };
 }
 
-function noteStyle(st: AgcStyle, name: string, w: WarningCollector): void {
+function noteStyle(st: AgcStyle, name: string, w: Scope): void {
   if (st.clipPath)
     w.add('unsupported-style:clipPath', 'style.clipPath (repeat-grid mask) is not converted', name);
 }
 
-const warnAlign = (align: string, name: string, w: WarningCollector): void =>
+const warnAlign = (align: string, name: string, w: Scope): void =>
   w.add(`stroke-align-ignored:${align}`, `stroke align "${align}" is rendered centred`, name);
 
 /** Every subpath is closed: inside/outside only means something for those. */
@@ -172,7 +269,7 @@ const pairs = (d: string): Point[] => {
   return pts;
 };
 
-function pathGeom(d: string, evenodd: boolean, name: string, w: WarningCollector): Geom {
+function pathGeom(d: string, evenodd: boolean, name: string, w: Scope): Geom {
   const letters = d.replace(/(\d)e([-+]?\d)/gi, '$1$2').match(/[A-Za-z]/g) ?? [];
   if (letters.some((ch) => !'MLCZ'.includes(ch))) {
     w.add(
@@ -210,7 +307,7 @@ function roundedRectPath(x: number, y: number, w: number, h: number, [tl, tr, br
   ].join(' ');
 }
 
-function readGeom(s: AgcShape | undefined, name: string, w: WarningCollector): Geom | null {
+function readGeom(s: AgcShape | undefined, name: string, w: Scope): Geom | null {
   if (!s) return null;
   switch (s.type) {
     case 'path':
@@ -294,7 +391,7 @@ function strokeExtras(s: AgcPaint | undefined): Partial<Stroke> {
   return out;
 }
 
-function parseShape(n: AgcNode, inh: Inherited, w: WarningCollector): IrShape | null {
+function parseShape(n: AgcNode, inh: Inherited, w: Scope): IrShape | null {
   const name = n.name ?? '';
   const geom = readGeom(n.shape, name, w);
   if (!geom) return null;
@@ -314,6 +411,8 @@ function parseShape(n: AgcNode, inh: Inherited, w: WarningCollector): IrShape | 
     fill = null;
     if (width === undefined) width = 1;
   }
+  fill = flattenDegenerate(fill, geom, w, name);
+  strokePaint = flattenDegenerate(strokePaint, geom, w, name);
   const stroke: Stroke | null = strokePaint
     ? { paint: strokePaint, width, ...strokeExtras(st.stroke) }
     : null;
@@ -339,7 +438,7 @@ function parseShape(n: AgcNode, inh: Inherited, w: WarningCollector): IrShape | 
   };
 }
 
-function parseGroup(n: AgcNode, inh: Inherited, w: WarningCollector): IrGroup {
+function parseGroup(n: AgcNode, inh: Inherited, w: Scope): IrGroup {
   const name = n.name ?? '';
   const st = n.style ?? {};
   noteStyle(st, name, w);
@@ -409,7 +508,7 @@ function argbCss(value: number): string {
   return a === 255 ? `rgb(${r},${g},${b})` : `rgba(${r},${g},${b},${round(a / 255)})`;
 }
 
-function parseText(n: AgcNode, w: WarningCollector): IrText | null {
+function parseText(n: AgcNode, w: Scope): IrText | null {
   const name = n.name ?? '';
   const t = n.text;
   const raw = t?.rawText;
@@ -438,6 +537,9 @@ function parseText(n: AgcNode, w: WarningCollector): IrText | null {
 
   // Style per character range. Without ranged styles, the node's own font and fill apply to everything.
   const nodeFill = readPaint(st.fill, 'fill', w, name);
+  if (nodeFill?.kind === 'gradient') {
+    w.add('unsupported-fill:gradient', 'a gradient fill on text is not converted', name);
+  }
   const nodeFillCss = nodeFill?.kind === 'solid' ? nodeFill.css : null;
   const ranges: (AgcTextRange & { end: number })[] = [];
   let at = 0;
@@ -605,7 +707,7 @@ function parseText(n: AgcNode, w: WarningCollector): IrText | null {
   };
 }
 
-function parseNode(n: AgcNode, inh: Inherited, w: WarningCollector, isRoot: boolean): IrNode | null {
+function parseNode(n: AgcNode, inh: Inherited, w: Scope, isRoot: boolean): IrNode | null {
   // Hidden descendants never paint, so they must not affect frames or warnings.
   // A hidden ROOT is kept: carousel slides are toggled by root opacity.
   if (!isRoot && isHidden(n)) return null;
@@ -622,14 +724,18 @@ function parseNode(n: AgcNode, inh: Inherited, w: WarningCollector, isRoot: bool
 }
 
 /** Parses one AGC document into one IR root per top-level node, each with its own warnings. */
-export function parseAgc(agc: AgcDocument, index: SyncIndex = buildSyncIndex([agc])): ParsedRoot[] {
+export function parseAgc(
+  agc: AgcDocument,
+  index: SyncIndex = buildSyncIndex([agc]),
+  gradients: Record<string, AgcGradientResource> = {},
+): ParsedRoot[] {
   if (!agc || !Array.isArray(agc.children))
     throw new XdError('InvalidAgc', 'AGC document has no children array');
   const first = agc.children[0];
   const rawRoots = first?.type === 'artboard' ? (first.artboard?.children ?? []) : agc.children;
   const out: ParsedRoot[] = [];
   for (const raw of rawRoots) {
-    const w = new WarningCollector();
+    const w = new Scope(gradients);
     if (agc.version && !/^1\./.test(agc.version)) {
       w.add(
         `agc-version-untested:${agc.version}`,

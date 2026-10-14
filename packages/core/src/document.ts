@@ -31,10 +31,11 @@ export function parseDocument(doc: XdDocument): ParsedArtboard[] {
     doc.artboards.map((a) => a.agc),
     doc.resources,
   );
+  const gradients = doc.resources?.resources?.gradients ?? {};
   return doc.artboards.map((a) => ({
     id: a.id,
     name: a.name,
     aliases: a.aliases ?? [],
-    roots: parseAgc(a.agc, index),
+    roots: parseAgc(a.agc, index, gradients),
   }));
 }

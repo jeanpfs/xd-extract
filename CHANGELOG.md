@@ -16,6 +16,8 @@
 - Polygons (`shape.type: polygon`, with `points`) become closed paths and take inside and outside strokes.
 - Blend modes (`style.blendMode`) become `mix-blend-mode` on shapes, groups and text. `normal` and `pass-through` draw as usual; an unknown mode is `unsupported-style:blendMode:<mode>`. `blend-mode-backdrop` reminds that the backdrop is only what is exported.
 - `edge-band-drift` now needs an edge band with essentially nothing in it (under 0.3 %, was 2 %): a triangle's apex or a circle's top is not mask drift.
+- Gradients: linear and radial gradients become `<linearGradient>` and `<radialGradient>` (bounding-box or user-space units as XD stores them, the radial focus and its own transform, stop alpha as `stop-opacity`), on fills and strokes, shared between identical uses. Stops come inline (`gradient.meta.ux.gradientResources`) or by `ref` from the resources document, which is how XD writes shared gradients. A single stop is a plain colour; a bounding-box gradient on a shape with no width or height uses its first stop (`gradient-degenerate-bbox`). Angular gradients have no SVG form and stay `unsupported-fill:gradient-angular`; a gradient on text stays `unsupported-fill:gradient`. `xd redact` keeps the `units` enum.
+- Validation: `dangling-reference` (error) when a `url(#id)` points at an id that does not exist.
 - `xd --version` / `-v`.
 - Release workflow: a `v*` tag publishes to npm with provenance and creates the GitHub release from this file.
 - Docs: `docs/reference.md` (errors, warnings, validation findings, file formats, troubleshooting), `CONTRIBUTING.md`, `SECURITY.md`, issue and PR templates.

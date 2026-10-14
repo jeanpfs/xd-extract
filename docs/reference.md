@@ -29,7 +29,9 @@ Every extraction records warnings in the report (`<file>.svg.report.json`) and p
 
 | Code | Fails `validate` | Meaning |
 |---|---|---|
-| `unsupported-fill:<type>` | yes | Fill is not a solid RGB colour (`gradient`, `pattern`, ...) |
+| `unsupported-fill:<type>` | yes | Fill is not converted: `pattern` (images), a `gradient` that is malformed, has no stops or whose shared `ref` is missing from the resources document, or a gradient on text |
+| `unsupported-fill:gradient-<type>` | yes | A gradient type SVG cannot draw (`angular`) |
+| `gradient-degenerate-bbox` | no | A bounding-box gradient on a shape with no width or height (a straight line): SVG would draw nothing, so its first stop colour is used |
 | `unsupported-fill:color-mode-<mode>` | yes | Solid fill in a colour mode other than RGB |
 | `unsupported-stroke:<type>` / `...color-mode-<mode>` | yes | Same, for strokes |
 | `unsupported-shape:<type>` | yes | Shape type not converted (a polygon with fewer than three usable points counts) |
@@ -101,4 +103,4 @@ Warnings: `text-not-rasterized` (fonts are never loaded during validation, so te
 - **`TokenExpired`:** tokens in share-link manifests are short-lived. Re-run; do not cache recordings.
 - **Empty or half-empty SVG:** run `xd validate`; `render-empty` or `edge-band-drift` points at the frame. Open an issue with the redacted document.
 - **Text looks different or is missing:** text is live `<text>` and needs its font on the viewer's machine (`text-font-not-embedded`). The width of left-aligned text is estimated for the frame (`text-bbox-approximate`); if the frame is off, crop with a different node.
-- **Output differs in gradients, blur, images:** not converted yet; see the warnings in the report.
+- **Output differs in blur, angular gradients, images:** not converted yet; see the warnings in the report.

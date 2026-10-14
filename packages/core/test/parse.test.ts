@@ -2,9 +2,11 @@ import {
   agcDoc,
   argb,
   circle,
+  gradientFill,
   group,
   polygon,
   rect,
+  resourcesDoc,
   solid,
   syncRef,
   text,
@@ -13,7 +15,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import { parseDocument } from '../src/document';
 import { XdError } from '../src/errors';
-import type { IrGroup, IrShape, IrText } from '../src/ir';
+import type { IrGroup, IrShape, IrText, Paint } from '../src/ir';
 import { parseAgc } from '../src/parse';
 
 const only = (roots: ReturnType<typeof parseAgc>) => {
@@ -789,5 +791,255 @@ describe('blend modes', () => {
     expect((only(parseAgc(agcDoc([g]))).node as IrGroup).blend).toBe('screen');
     const t = text('T', 'abc', { style: { blendMode: 'overlay' } });
     expect((only(parseAgc(agcDoc([t]))).node as IrText).blend).toBe('overlay');
+  });
+});
+
+describe('gradients', () => {
+  const red = [255, 0, 0] as [number, number, number];
+  const blue = [0, 0, 255] as [number, number, number];
+  const filled = (fill: ReturnType<typeof gradientFill>, w = 40, h = 20) => rect('r', 0, 0, w, h, { fill });
+  const paintOf = (n: ReturnType<typeof filled>, doc?: ReturnType<typeof resourcesDoc>) => {
+    const artboard = agcDoc([n]);
+    const root = doc
+      ? parseDocument({
+          source: { kind: 'fixture', ref: 't' },
+          artboards: [{ id: 'a', name: 'A', agc: artboard }],
+          resources: doc,
+        })[0]!.roots[0]!
+      : only(parseAgc(artboard));
+    return { root, fill: (root.node as IrShape).fill as Paint };
+  };
+
+  it('reads an inline linear gradient with its stops and bounding-box geometry', () => {
+    const { root, fill } = paintOf(
+      filled(
+        gradientFill(
+          'linear',
+          [
+            [0, red],
+            [1, blue],
+          ],
+          { x1: 0, y1: 0.5, x2: 1, y2: 0.5 },
+        ),
+      ),
+    );
+    expect(root.warnings).toEqual([]);
+    expect(fill).toEqual({
+      kind: 'gradient',
+      def: {
+        type: 'linear',
+        units: 'objectBoundingBox',
+        x1: 0,
+        y1: 0.5,
+        x2: 1,
+        y2: 0.5,
+        stops: [
+          { offset: 0, color: 'rgb(255,0,0)', opacity: 1 },
+          { offset: 1, color: 'rgb(0,0,255)', opacity: 1 },
+        ],
+      },
+    });
+  });
+
+  it('takes the stops of a shared gradient from the resources document by ref', () => {
+    const doc = resourcesDoc({
+      g1: {
+        type: 'linear',
+        stops: [
+          [0, red],
+          [0.4, blue],
+          [1, red],
+        ],
+      },
+    });
+    const { root, fill } = paintOf(filled(gradientFill('linear', [], {}, { ref: 'g1' })), doc);
+    expect(root.warnings).toEqual([]);
+    expect(fill.kind === 'gradient' && fill.def.stops.map((s) => s.offset)).toEqual([0, 0.4, 1]);
+  });
+
+  it('reports a ref it cannot find, as missing art', () => {
+    const { root, fill } = paintOf(filled(gradientFill('linear', [], {}, { ref: 'nope' })));
+    expect(fill.kind).toBe('unsupported');
+    expect(root.warnings.map((w) => w.code)).toEqual(['unsupported-fill:gradient']);
+  });
+
+  it('keeps the alpha of a stop', () => {
+    const { fill } = paintOf(
+      filled(
+        gradientFill('linear', [
+          [0, red, 0.25],
+          [1, blue],
+        ]),
+      ),
+    );
+    expect(fill.kind === 'gradient' && fill.def.stops.map((s) => s.opacity)).toEqual([0.25, 1]);
+  });
+
+  it('reads a radial gradient, with and without its own transform', () => {
+    const plain = paintOf(
+      filled(
+        gradientFill('radial', [
+          [0, red],
+          [1, blue],
+        ]),
+      ),
+    ).fill;
+    expect(plain).toMatchObject({
+      kind: 'gradient',
+      def: { type: 'radial', cx: 0.5, cy: 0.5, fx: 0.5, fy: 0.5, r: 0.5 },
+    });
+    const t = { a: 0.68, b: 0.73, c: -0.3, d: 0.28, tx: 0.31, ty: -0.005 };
+    const moved = paintOf(
+      filled(
+        gradientFill(
+          'radial',
+          [
+            [0, red],
+            [1, blue],
+          ],
+          { transform: t },
+        ),
+      ),
+    ).fill;
+    expect(moved.kind === 'gradient' && moved.def.type === 'radial' && moved.def.transform).toEqual([
+      0.68, 0.73, -0.3, 0.28, 0.31, -0.005,
+    ]);
+  });
+
+  it('keeps userSpaceOnUse as written', () => {
+    const { fill } = paintOf(
+      filled(
+        gradientFill(
+          'linear',
+          [
+            [0, red],
+            [1, blue],
+          ],
+          { units: 'userSpaceOnUse', x1: 0, y1: 0, x2: 40, y2: 0 },
+        ),
+      ),
+    );
+    expect(fill).toMatchObject({ kind: 'gradient', def: { units: 'userSpaceOnUse', x2: 40 } });
+  });
+
+  it('reports a type SVG cannot draw (angular) with its own code', () => {
+    const { root, fill } = paintOf(
+      filled(
+        gradientFill('angular', [
+          [0, red],
+          [1, blue],
+        ]),
+      ),
+    );
+    expect(fill.kind).toBe('unsupported');
+    expect(root.warnings.map((w) => w.code)).toEqual(['unsupported-fill:gradient-angular']);
+  });
+
+  it('reports malformed gradients instead of drawing the wrong thing', () => {
+    const codes = (f: ReturnType<typeof gradientFill>) => paintOf(filled(f)).root.warnings.map((w) => w.code);
+    expect(codes(gradientFill('linear', []))).toEqual(['unsupported-fill:gradient']);
+    expect(
+      codes(
+        gradientFill(
+          'linear',
+          [
+            [0, red],
+            [1, blue],
+          ],
+          { x2: undefined },
+        ),
+      ),
+    ).toEqual(['unsupported-fill:gradient']);
+    const cmyk = gradientFill('linear', [
+      [0, red],
+      [1, blue],
+    ]);
+    (cmyk.gradient!.meta!.ux!.gradientResources!.stops![0]!.color as { mode: string }).mode = 'CMYK';
+    expect(codes(cmyk)).toEqual(['unsupported-fill:color-mode-CMYK']);
+  });
+
+  it('turns a single stop into a plain colour', () => {
+    const { fill, root } = paintOf(filled(gradientFill('linear', [[0, red, 0.5]])));
+    expect(fill).toEqual({ kind: 'solid', css: 'rgba(255,0,0,0.5)' });
+    expect(root.warnings).toEqual([]);
+  });
+
+  it('falls back to the first stop where the bounding box has no area, and says so', () => {
+    const { fill, root } = paintOf(
+      filled(
+        gradientFill('linear', [
+          [0, red],
+          [1, blue],
+        ]),
+        0,
+        20,
+      ),
+    );
+    expect(fill).toEqual({ kind: 'solid', css: 'rgb(255,0,0)' });
+    expect(root.warnings.map((w) => w.code)).toEqual(['gradient-degenerate-bbox']);
+  });
+
+  it('does not need that fallback in user space', () => {
+    const f = gradientFill(
+      'linear',
+      [
+        [0, red],
+        [1, blue],
+      ],
+      { units: 'userSpaceOnUse', x1: 0, y1: 0, x2: 0, y2: 1 },
+    );
+    expect(paintOf(filled(f, 0, 20)).fill.kind).toBe('gradient');
+  });
+
+  it('is a plate candidate like a solid fill, and a group fill reaches its children', () => {
+    const g = group('G', [rect('a', 0, 0, 5, 5)], {
+      style: {
+        fill: gradientFill('linear', [
+          [0, red],
+          [1, blue],
+        ]),
+      },
+    });
+    const child = (only(parseAgc(agcDoc([g]))).node as IrGroup).children[0] as IrShape;
+    expect(child.fill?.kind).toBe('gradient');
+    expect(child.ownFill).toBe(false);
+    expect(
+      paintOf(
+        filled(
+          gradientFill('linear', [
+            [0, red],
+            [1, blue],
+          ]),
+        ),
+      ).root.node,
+    ).toMatchObject({
+      ownFill: true,
+    });
+  });
+
+  it('works on a stroke too', () => {
+    const stroke = {
+      ...gradientFill('linear', [
+        [0, red],
+        [1, blue],
+      ]),
+      width: 2,
+    };
+    const r = only(parseAgc(agcDoc([rect('r', 0, 0, 10, 10, { stroke })])));
+    expect((r.node as IrShape).stroke?.paint.kind).toBe('gradient');
+    expect(r.warnings).toEqual([]);
+  });
+
+  it('still reports a gradient on text as missing art', () => {
+    const t = text('T', 'abc', {
+      style: {
+        fill: gradientFill('linear', [
+          [0, red],
+          [1, blue],
+        ]),
+      },
+    });
+    t.meta = { ux: {} };
+    expect(only(parseAgc(agcDoc([t]))).warnings.map((w) => w.code)).toContain('unsupported-fill:gradient');
   });
 });

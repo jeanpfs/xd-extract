@@ -125,6 +125,7 @@ describe('redactDocument', () => {
       'textTransform',
       'textScript',
       'blendMode',
+      'units',
     ]);
     for (const [key, value] of leaves(red.artboards[0]!.agc)) {
       // rawText keeps its length and line breaks so the stored line layout still indexes into it

@@ -18,6 +18,17 @@ describe('validateStatic', () => {
     );
   });
 
+  it('flags a url(#id) that points nowhere, and accepts one that resolves', () => {
+    const g = '<defs><linearGradient id="g"><stop offset="0" stop-color="red"/></linearGradient></defs>';
+    expect(validateStatic(svg(`${g}<rect width="5" height="5" fill="url(#g)"/>`))).toEqual([]);
+    expect(codes(validateStatic(svg('<rect width="5" height="5" fill="url(#nope)"/>')))).toEqual([
+      'dangling-reference',
+    ]);
+    expect(
+      codes(validateStatic(svg('<rect width="5" height="5" fill="red" clip-path="url(#nope)"/>'))),
+    ).toEqual(['dangling-reference']);
+  });
+
   it('flags an SVG with no shapes', () => {
     expect(codes(validateStatic(svg('<g/>')))).toEqual(['empty-svg']);
   });

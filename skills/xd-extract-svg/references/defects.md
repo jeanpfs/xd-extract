@@ -10,7 +10,7 @@ What you see, what causes it, and which validator finding catches it (if any).
 | White band on one edge and art cut on the opposite edge | Frame taken from a drifted mask | `edge-band-drift` (warn: can be legitimate art) |
 | Art visible but strokes missing | Line colour in `fill` not mapped to `stroke` | `line-without-stroke` |
 | Uniformly clipped edges | Frame from a bounding box without stroke half-width, or an outer loose mask used as frame | `tight-frame` (warn, content-box frames only) |
-| Part of the art missing, flat or hollow areas | Gradient or image fill not converted | `extraction:unsupported-fill:*` |
+| Part of the art missing, flat or hollow areas | Image fill, angular gradient or gradient on text not converted | `extraction:unsupported-fill:*` |
 | Blur or inner shadows absent | Not implemented (drop shadows are converted) | `extraction:unsupported-style:filters:<type>` |
 | Text in the wrong font | The font is not embedded; the viewer substitutes one | `extraction:text-font-not-embedded:<family>` |
 | Text cut off at the frame edge | Left-aligned width is estimated | `extraction:text-bbox-approximate` |

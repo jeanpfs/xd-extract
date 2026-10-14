@@ -57,11 +57,16 @@ export function validateStatic(svg: string, warnings: Warning[] = []): Finding[]
   let linesWithoutStroke = 0;
   let groupInClip = 0;
   let badNumbers = 0;
+  const ids = new Set<string>();
+  const refs = new Set<string>();
 
   const walk = (el: XmlNode, inClip: boolean, fillSet: boolean, strokeSet: boolean): void => {
     for (let i = 0; i < (el.attributes?.length ?? 0); i++) {
-      if (/NaN|Infinity/.test((el.attributes as ArrayLike<{ value: string }>)[i]?.value ?? ''))
-        badNumbers += 1;
+      const attr = (el.attributes as ArrayLike<{ name: string; value: string }>)[i];
+      const value = attr?.value ?? '';
+      if (/NaN|Infinity/.test(value)) badNumbers += 1;
+      if (attr?.name === 'id') ids.add(value);
+      for (const m of value.matchAll(/url\(#([^)]+)\)/g)) refs.add(m[1] as string);
     }
     const nowFill = fillSet || !!el.hasAttribute?.('fill');
     const nowStroke = strokeSet || !!el.hasAttribute?.('stroke');
@@ -95,6 +100,12 @@ export function validateStatic(svg: string, warnings: Warning[] = []): Finding[]
     findings.push(
       err('line-without-stroke', `${linesWithoutStroke} <line> element(s) have no stroke and paint nothing`),
     );
+  const dangling = [...refs].filter((r) => !ids.has(r));
+  if (dangling.length) {
+    findings.push(
+      err('dangling-reference', `url(#id) points at nothing: ${dangling.slice(0, 3).join(', ')}`),
+    );
+  }
   if (badNumbers) findings.push(err('nan-number', `${badNumbers} attribute(s) contain NaN or Infinity`));
 
   for (const w of warnings) {

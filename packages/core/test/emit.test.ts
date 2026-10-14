@@ -3,6 +3,7 @@ import {
   agcDoc,
   argb,
   circle,
+  gradientFill,
   group,
   polygon,
   rect,
@@ -594,5 +595,99 @@ describe('symbol instances', () => {
     const { svg } = convert(inst);
     expect(svg.match(/<rect/g)).toHaveLength(2);
     expect(svg).toContain('matrix(1 0 0 1 100 0)');
+  });
+});
+
+describe('gradients', () => {
+  const red = [255, 0, 0] as [number, number, number];
+  const blue = [0, 0, 255] as [number, number, number];
+  const horizontal = (extra = {}) =>
+    gradientFill(
+      'linear',
+      [
+        [0, red],
+        [1, blue],
+      ],
+      { x1: 0, y1: 0.5, x2: 1, y2: 0.5, ...extra },
+    );
+  const pixel = (svg: string, w: number, x: number, y: number) => {
+    const img = new Resvg(svg, {
+      fitTo: { mode: 'width', value: w },
+      font: { loadSystemFonts: false },
+    }).render();
+    const i = (y * img.width + x) * 4;
+    return [...img.pixels.slice(i, i + 4)] as [number, number, number, number];
+  };
+
+  it('emits a gradient in defs and fills the shape with it', () => {
+    const { svg } = convert(group('Root', [rect('r', 0, 0, 100, 40, { fill: horizontal() })]));
+    expect(svg).toContain(
+      '<linearGradient id="grad-1" gradientUnits="objectBoundingBox" x1="0" y1="0.5" x2="1" y2="0.5"><stop offset="0" stop-color="rgb(255,0,0)"/><stop offset="1" stop-color="rgb(0,0,255)"/></linearGradient>',
+    );
+    expect(svg).toMatch(/<rect[^>]*fill="url\(#grad-1\)"/);
+    const left = pixel(svg, 100, 2, 20);
+    const right = pixel(svg, 100, 97, 20);
+    expect(left[0]).toBeGreaterThan(240);
+    expect(left[2]).toBeLessThan(15);
+    expect(right[2]).toBeGreaterThan(240);
+    expect(right[0]).toBeLessThan(15);
+  });
+
+  it('stops carry their alpha as stop-opacity', () => {
+    const f = gradientFill('linear', [
+      [0, red, 0.5],
+      [1, blue],
+    ]);
+    const { svg } = convert(group('Root', [rect('r', 0, 0, 100, 40, { fill: f })]));
+    expect(svg).toContain('<stop offset="0" stop-color="rgb(255,0,0)" stop-opacity="0.5"/>');
+  });
+
+  it('shares one definition between identical gradients and keeps different ones apart', () => {
+    const { svg } = convert(
+      group('Root', [
+        rect('a', 0, 0, 50, 40, { fill: horizontal() }),
+        rect('b', 50, 0, 50, 40, { fill: horizontal() }),
+        rect('c', 100, 0, 50, 40, { fill: horizontal({ x2: 0.5 }) }),
+      ]),
+    );
+    expect(svg.match(/<linearGradient/g)).toHaveLength(2);
+    expect(svg.match(/fill="url\(#grad-1\)"/g)).toHaveLength(2);
+    expect(svg).toContain('url(#grad-2)');
+  });
+
+  it('emits a radial gradient with its focus and transform', () => {
+    const t = { a: 0.5, b: 0, c: 0, d: 1, tx: 0.25, ty: 0 };
+    const f = gradientFill(
+      'radial',
+      [
+        [0, red],
+        [1, blue],
+      ],
+      { transform: t },
+    );
+    const { svg } = convert(group('Root', [rect('r', 0, 0, 100, 40, { fill: f })]));
+    expect(svg).toContain(
+      '<radialGradient id="grad-1" gradientUnits="objectBoundingBox" cx="0.5" cy="0.5" r="0.5" fx="0.5" fy="0.5" gradientTransform="matrix(0.5 0 0 1 0.25 0)">',
+    );
+    expect(pixel(svg, 100, 50, 20)[0]).toBeGreaterThan(200); // the centre is the first stop
+  });
+
+  it('strokes with a gradient too, including an inside-aligned one', () => {
+    const stroke = { ...horizontal(), width: 10, align: 'inside' } as never;
+    const { svg } = convert(group('Root', [rect('r', 0, 0, 100, 40, { stroke })]));
+    expect(svg).toMatch(/<rect[^>]*fill="none"[^>]*stroke="url\(#grad-1\)"[^>]*stroke-width="20"/);
+  });
+
+  it('uses the first stop as a flat colour where the box has no area', () => {
+    const line = rect('r', 0, 0, 100, 0, { fill: horizontal() });
+    const { svg } = convert(group('Root', [card(), line]));
+    expect(svg).not.toContain('<linearGradient');
+    expect(svg).toMatch(/<rect[^>]*height="0"[^>]*fill="rgb\(255,0,0\)"/);
+  });
+
+  it('keeps userSpaceOnUse in the element coordinates', () => {
+    const f = horizontal({ units: 'userSpaceOnUse', x1: 0, y1: 0, x2: 100, y2: 0 });
+    const { svg } = convert(group('Root', [rect('r', 0, 0, 100, 40, { fill: f })]));
+    expect(svg).toContain('gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="100" y2="0"');
   });
 });

@@ -2,7 +2,41 @@ import type { Matrix } from './matrix';
 
 export type Point = [number, number];
 
-export type Paint = { kind: 'solid'; css: string } | { kind: 'unsupported'; reason: string };
+export interface GradientStop {
+  offset: number;
+  /** `rgb(r,g,b)`; the alpha is `opacity`. */
+  color: string;
+  opacity: number;
+}
+
+/** Linear and radial gradients, as SVG draws them. Angular ones have no SVG equivalent. */
+export type Gradient =
+  | {
+      type: 'linear';
+      units: 'objectBoundingBox' | 'userSpaceOnUse';
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+      stops: GradientStop[];
+    }
+  | {
+      type: 'radial';
+      units: 'objectBoundingBox' | 'userSpaceOnUse';
+      cx: number;
+      cy: number;
+      fx: number;
+      fy: number;
+      r: number;
+      /** In the same units as the geometry. */
+      transform?: Matrix;
+      stops: GradientStop[];
+    };
+
+export type Paint =
+  | { kind: 'solid'; css: string }
+  | { kind: 'gradient'; def: Gradient }
+  | { kind: 'unsupported'; reason: string };
 
 /** A drop shadow, in the coordinates of the node it belongs to. `color` is `rgb(r,g,b)`; alpha is `opacity`. */
 export interface Shadow {

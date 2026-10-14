@@ -1,4 +1,11 @@
-import type { AgcDocument, AgcNode, AgcStyle, AgcTextRange, AgcTransform } from '../packages/core/src/agc';
+import type {
+  AgcDocument,
+  AgcNode,
+  AgcPaint,
+  AgcStyle,
+  AgcTextRange,
+  AgcTransform,
+} from '../packages/core/src/agc';
 
 const T0: AgcTransform = { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 };
 
@@ -142,3 +149,54 @@ export const polygon = (
   style,
   ...extra,
 });
+
+type Rgb = [number, number, number];
+/** [offset, rgb, alpha?] */
+export type Stop = [number, Rgb, number?];
+
+const stopsOf = (stops: Stop[]) =>
+  stops.map(([offset, [r, g, b], alpha]) => ({
+    offset,
+    color: { mode: 'RGB', value: { r, g, b }, ...(alpha === undefined ? {} : { alpha }) },
+  }));
+
+/** A gradient fill the way XD writes it: stops inline, or by `ref` into the resources document. */
+export const gradientFill = (
+  type: 'linear' | 'radial' | 'angular',
+  stops: Stop[],
+  geometry: Record<string, unknown> = {},
+  opts: { ref?: string } = {},
+): AgcPaint => {
+  const base =
+    type === 'linear'
+      ? { x1: 0.5, y1: 0, x2: 0.5, y2: 1 }
+      : type === 'radial'
+        ? { cx: 0.5, cy: 0.5, fx: 0.5, fy: 0.5, r: 0.5 }
+        : {};
+  const resource = {
+    type,
+    stops: stopsOf(stops),
+    ...(type === 'angular' ? { x: 0.5, y: 0.5, rotation: 0 } : {}),
+  };
+  return {
+    type: 'gradient',
+    gradient: {
+      units: 'objectBoundingBox',
+      ...base,
+      ...geometry,
+      ...(opts.ref ? { ref: opts.ref } : { meta: { ux: { gradientResources: resource } } }),
+    },
+  } as AgcPaint;
+};
+
+/** The resources document that holds shared gradients, for fills written with a `ref`. */
+export const resourcesDoc = (gradients: Record<string, { type: string; stops: Stop[] }>): AgcDocument =>
+  ({
+    version: '1.5.0',
+    children: [],
+    resources: {
+      gradients: Object.fromEntries(
+        Object.entries(gradients).map(([id, g]) => [id, { type: g.type, stops: stopsOf(g.stops) }]),
+      ),
+    },
+  }) as AgcDocument;
