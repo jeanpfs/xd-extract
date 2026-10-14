@@ -1,14 +1,14 @@
 # xd-extract
 
 [![ci](https://github.com/jeanpfs/xd-extract/actions/workflows/ci.yml/badge.svg)](https://github.com/jeanpfs/xd-extract/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/xd-extract)](https://www.npmjs.com/package/xd-extract)
+[![npm](https://img.shields.io/npm/v/@jean.pierre/xd-extract)](https://www.npmjs.com/package/@jean.pierre/xd-extract)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/jeanpfs/xd-extract/blob/main/LICENSE)
 
 Extract **SVG** vector art from Adobe XD designs, from a public share link (`xd.adobe.com/view/...`) or a local `.xd` file. List the nodes, pick one, export it, and check the result.
 
 XD share links draw into a `<canvas>`, so right-click and download give you nothing usable, and a screenshot is raster. The vector data travels as a scene-graph JSON (AGC) that the viewer only paints. `xd-extract` reads that JSON directly and converts the node tree to SVG.
 
-## Status: 0.2.1, early
+## Status: 0.3.0, early
 
 - **Verified:** `.xd` files (one public sample), and a **real share link that carries vector data** (an XD 2.33 design with 6 artboards and 120 top-level nodes): the page, the manifest and every artboard were fetched on the first try, all 117 nodes with geometry converted, and the 26 exports that use masks (`clipPath`) validate. Only one such link has been tested.
 - **Not verified on real data:** the mask-drift correction (it never triggered; it has synthetic tests only), `/spec/` links, password-protected links, and AGC versions other than `1.5.0`. The only *public* link we could find (an Adobe sample) is raster-only. If a link fails, `xd inventory <link> --record dir` captures the exchange (see [Privacy](#privacy)) and an issue with the error code helps a lot.
@@ -20,9 +20,9 @@ XD share links draw into a `<canvas>`, so right-click and download give you noth
 Needs Node.js 22 or newer.
 
 ```bash
-npx -y xd-extract inventory design.xd            # what is in the design?
-npx -y xd-extract extract design.xd --node "Sign Up form" -o out/sign-up.svg
-npx -y xd-extract validate out/sign-up.svg
+npx -y @jean.pierre/xd-extract inventory design.xd            # what is in the design?
+npx -y @jean.pierre/xd-extract extract design.xd --node "Sign Up form" -o out/sign-up.svg
+npx -y @jean.pierre/xd-extract validate out/sign-up.svg
 ```
 
 A real session on a public sample (`single.xd` from [xd2svg](https://github.com/L2jLiga/xd2svg), MIT):

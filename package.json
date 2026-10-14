@@ -15,7 +15,7 @@
     "skills:check": "node scripts/check-skills.mjs",
     "fixtures:fetch": "node scripts/fetch-fixtures.mjs",
     "fixtures:build": "pnpm fixtures:fetch && pnpm build && node scripts/build-fixtures.mjs",
-    "build": "pnpm --filter xd-extract build",
+    "build": "pnpm --filter @jean.pierre/xd-extract build",
     "xd": "node packages/cli/dist/bin.js",
     "prepare": "git config core.hooksPath .githooks || true"
   },

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.0 (2026-10-13)
+
+- Renamed the npm package to `@jean.pierre/xd-extract`; the unscoped `xd-extract` is deprecated. Install with `npx -y @jean.pierre/xd-extract` or `npm i -g @jean.pierre/xd-extract`; the `xd` command is unchanged. No functional change.
+
 ## 0.2.1 (2026-10-14)
 
 - Text strokes: a solid or gradient stroke on text is drawn on the `<text>` (colour, width, join, cap, dashes), centred; inside and outside alignment is reported as `stroke-align-ignored:*`. The frame grows by half the width. Seen once, in the tests-suite (solid, width 1); XD's own paint order was not checked.

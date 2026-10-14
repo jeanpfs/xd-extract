@@ -30,7 +30,7 @@ jobs:
       - run: pnpm build
       - run: pnpm test
       - name: Publish with provenance
-        run: pnpm --filter xd-extract publish --provenance --access public --no-git-checks
+        run: pnpm --filter @jean.pierre/xd-extract publish --provenance --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: GitHub release from CHANGELOG

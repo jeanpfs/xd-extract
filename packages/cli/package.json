@@ -1,9 +1,9 @@
 {
-  "name": "xd-extract",
-  "version": "0.2.1",
+  "name": "@jean.pierre/xd-extract",
+  "version": "0.3.0",
   "description": "Extract SVG vectors from Adobe XD share links and .xd files, with inventory and validation.",
   "license": "MIT",
-  "author": "jeanpfs",
+  "author": "jean.pierre <jean.pfs2@gmail.com>",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/jeanpfs/xd-extract.git"
