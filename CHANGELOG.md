@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.1 (2026-10-14)
 
 - Text strokes: a solid or gradient stroke on text is drawn on the `<text>` (colour, width, join, cap, dashes), centred; inside and outside alignment is reported as `stroke-align-ignored:*`. The frame grows by half the width. Seen once, in the tests-suite (solid, width 1); XD's own paint order was not checked.
 - Gradient fills on text: placed in user space over the text box (the frame for area text, where XD stores its height), so the gradient spans the same box XD measures it on. Never seen in real data, so it is reported (`text-gradient-unverified`), and it replaces the ranged colours. Image fills on text are still reported.
