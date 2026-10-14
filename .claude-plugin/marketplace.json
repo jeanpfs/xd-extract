@@ -1,7 +1,7 @@
 {
   "name": "xd-extract",
   "description": "Skills for extracting and validating SVG from Adobe XD designs.",
-  "owner": { "name": "jeanpfs" },
+  "owner": { "name": "jean.pierre" },
   "plugins": [
     {
       "name": "xd-extract",
