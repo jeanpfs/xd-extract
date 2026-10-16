@@ -64,6 +64,11 @@ describe('validateStatic', () => {
     expect(codes(validateStatic(svg(`<path d="M 0 0 L NaN 4 Z" fill="red"/>`)))).toEqual(['nan-number']);
   });
 
+  it('ignores NaN-looking text inside embedded image data URIs', () => {
+    const dataUri = 'data:image/jpeg;base64,/9j/4AAQ9NaNoRkRfInfinityAAAA';
+    expect(codes(validateStatic(svg(`${card}<image href="${dataUri}" width="2" height="2"/>`)))).toEqual([]);
+  });
+
   it('maps extraction warnings: unsupported paint is an error, the rest are warnings', () => {
     const f = validateStatic(svg(card), [
       { code: 'unsupported-fill:gradient', message: 'g', count: 2 },

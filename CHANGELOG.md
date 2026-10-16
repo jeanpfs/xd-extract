@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fix: `xd validate` reported a false `nan-number` error when the base64 payload of an embedded image happened to contain the letters "NaN" (seen on the "Our Top Services" node of the public `single.xd` sample). Embedded `data:` URIs are no longer scanned.
+
 ## 0.2.2 (2026-10-16)
 
 - Security: the transitive `esbuild` dependency is overridden to `>=0.28.1` (Dependabot alert). It is a build-time dependency; the published package is unaffected in behaviour.

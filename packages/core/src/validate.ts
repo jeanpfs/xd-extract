@@ -64,7 +64,9 @@ export function validateStatic(svg: string, warnings: Warning[] = []): Finding[]
     for (let i = 0; i < (el.attributes?.length ?? 0); i++) {
       const attr = (el.attributes as ArrayLike<{ name: string; value: string }>)[i];
       const value = attr?.value ?? '';
-      if (/NaN|Infinity/.test(value)) badNumbers += 1;
+      // embedded images are base64 data URIs, whose payload can contain "NaN" by chance
+      const isDataUri = attr?.name.endsWith('href') && value.startsWith('data:');
+      if (!isDataUri && /NaN|Infinity/.test(value)) badNumbers += 1;
       if (attr?.name === 'id') ids.add(value);
       for (const m of value.matchAll(/url\(#([^)]+)\)/g)) refs.add(m[1] as string);
     }
