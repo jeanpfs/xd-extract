@@ -6,7 +6,7 @@
 
 Extract **SVG** vector art from Adobe XD designs, from a public share link (`xd.adobe.com/view/...`) or a local `.xd` file. List the nodes, pick one, export it, and check the result.
 
-![xd-extract demo: inventory a .xd file, extract one node to SVG, validate it, then the rendered result](https://raw.githubusercontent.com/jeanpfs/xd-extract/main/assets/demo.gif)
+![Claude Code loads the xd-extract-svg skill, inventories design.xd, extracts the "How it works" section to SVG, validates it and checks the render, with a live preview of the SVG on the right](https://raw.githubusercontent.com/jeanpfs/xd-extract/main/assets/demo.gif)
 
 XD share links draw into a `<canvas>`, so right-click and download give you nothing usable, and a screenshot is raster. The vector data travels as a scene-graph JSON (AGC) that the viewer only paints. `xd-extract` reads that JSON directly and converts the node tree to SVG.
 

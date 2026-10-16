@@ -1,23 +1,43 @@
 #!/usr/bin/env bash
-# Builds demo.gif: the VHS terminal recording followed by the extracted SVG rendered in Chrome.
-# Run from a directory containing design.xd (see demo.tape for setup). Needs vhs, ffmpeg, gifsicle and Chrome.
+# Builds demo.gif from the VHS recording (session.mp4) and the SVG the agent produced (how-it-works.svg).
+# The terminal is shown on the left; a preview panel on the right fills in when the agent looks at the render.
+# Waiting time is sped up. Run in a directory holding session.mp4 and how-it-works.svg.
+# Needs ffmpeg, gifsicle, ImageMagick and Node (for the resvg CLI).
 set -euo pipefail
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CHROME="${CHROME:-/Applications/Google Chrome.app/Contents/MacOS/Google Chrome}"
 
-vhs "$HERE/demo.tape"
+T_SHOW=24.5   # second of session.mp4 where the agent renders the SVG; the preview appears then
+FONT="${FONT:-/System/Library/Fonts/Menlo.ttc}"
 
-cat > view.html <<'HTML'
-<!doctype html><meta charset="utf-8"><body style="margin:0;background:#1e1e2e;width:1200px;height:300px;display:flex;align-items:center;justify-content:center;font-family:system-ui;color:#cdd6f4">
-<div style="text-align:center"><img src="out/sign-up.svg" style="height:222px;border-radius:12px;box-shadow:0 10px 40px #0008"><div style="margin-top:10px;font-size:20px;opacity:.8">out/sign-up.svg</div></div>
-HTML
-"$CHROME" --headless=new --disable-gpu --hide-scrollbars --window-size=1200,300 \
-  --allow-file-access-from-files --screenshot=result.png "file://$PWD/view.html"
+# Preview panel, 420x720: an empty placeholder first, then the SVG rendered by resvg with the validation result.
+npx -y @resvg/resvg-js-cli --fit-width 744 how-it-works.svg render.png
+magick -size 420x720 xc:'#181825' -font "$FONT" -fill '#a6adc8' -pointsize 15 -annotate +24+40 'Preview' \
+  -fill none -stroke '#45475a' -strokewidth 1.5 -draw "roundrectangle 24,250 396,481 10,10" \
+  -stroke none -fill '#585b70' -pointsize 14 -annotate +112+372 'out/how-it-works.svg' \
+  -stroke '#313244' -strokewidth 1 -draw "line 0,0 0,720" -depth 8 panel-empty.png
+magick render.png -resize 372x -bordercolor '#313244' -border 1 +repage card.png
+magick -size 420x720 xc:'#181825' -font "$FONT" -fill '#a6adc8' -pointsize 15 -annotate +24+40 'Preview' \
+  -stroke '#313244' -strokewidth 1 -draw "line 0,0 0,720" -stroke none \
+  card.png -gravity northwest -geometry +24+250 -composite \
+  -fill '#cdd6f4' -pointsize 14 -annotate +24+470 'out/how-it-works.svg' \
+  -fill '#a6e3a1' -annotate +24+500 '✓' -fill '#a6adc8' -annotate +44+500 'validated: 0 errors' \
+  -fill '#6c7086' -annotate +24+530 '1920 x 900 · vector · 44 shapes' -depth 8 panel-result.png
 
-# Re-encode the VHS gif first: it keeps ffmpeg's concat filter from re-initialising on odd frame geometry.
-ffmpeg -v error -y -i terminal.gif -vf "fps=12,scale=800:-2:flags=lanczos,format=yuv420p" -an term.mp4
-ffmpeg -v error -y -i term.mp4 -loop 1 -framerate 12 -t 3 -i result.png -filter_complex \
-  "[0:v]setsar=1,fps=12,format=rgb24[a];[1:v]scale=800:-2:flags=lanczos,setsar=1,fps=12,format=rgb24[b];[a][b]concat=n=2:v=1:a=0,split[s0][s1];[s0]palettegen=max_colors=200:stats_mode=full[p];[s1][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle" \
-  demo-raw.gif
-gifsicle -O3 --lossy=20 demo-raw.gif -o demo.gif
+# Speed ramp: typing at 1x, the agent's work at 1.5x-3x, then hold the final answer.
+ffmpeg -v error -y -i session.mp4 -loop 1 -framerate 30 -i panel-empty.png -loop 1 -framerate 30 -i panel-result.png \
+  -filter_complex "
+[1:v]format=rgb24[pe];[2:v]format=rgb24[pr];
+[pe][pr]overlay=enable='gte(t,$T_SHOW)'[panel];
+[0:v]format=rgb24[term];
+[term][panel]hstack=inputs=2:shortest=1,fps=30[full];
+[full]split=6[a][b][c][d][e][f];
+[a]trim=1.0:7.6,setpts=PTS-STARTPTS[s1];
+[b]trim=7.6:19.0,setpts=(PTS-STARTPTS)/3[s2];
+[c]trim=19.0:24.0,setpts=(PTS-STARTPTS)/2[s3];
+[d]trim=24.0:29.5,setpts=(PTS-STARTPTS)/1.5[s4];
+[e]trim=29.5:32.2,setpts=PTS-STARTPTS[s5];
+[f]trim=32.1:32.2,setpts=PTS-STARTPTS,tpad=stop_mode=clone:stop_duration=3.5[s6];
+[s1][s2][s3][s4][s5][s6]concat=n=6:v=1:a=0,fps=12,scale=960:-2:flags=lanczos,split[x][y];
+[x]palettegen=max_colors=256:stats_mode=full[p];[y][p]paletteuse=dither=bayer:bayer_scale=3[out]" \
+  -map "[out]" demo-raw.gif
+gifsicle -O3 --lossy=25 demo-raw.gif -o demo.gif
 echo "wrote $PWD/demo.gif"
