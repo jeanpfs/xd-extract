@@ -6,7 +6,7 @@ description: "Validate SVG files extracted from Adobe XD: XML and structure chec
 # Validate extracted SVG
 
 ```bash
-npx -y xd-extract validate out/*.svg [--expect-same-frame] [--json]
+npx -y xd-extract@latest validate out/*.svg [--expect-same-frame] [--json]
 ```
 
 Exit code `0`: no errors (warnings may remain). Exit code `1`: at least one `error`. Needs Node >= 22.

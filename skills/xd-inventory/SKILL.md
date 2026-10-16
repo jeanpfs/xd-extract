@@ -8,7 +8,7 @@ description: "List and search the nodes of an Adobe XD design (share link or .xd
 Answer "what is in this design?" and "which node is the one I mean?" without extracting yet.
 
 ```bash
-npx -y xd-extract inventory <source> --json
+npx -y xd-extract@latest inventory <source> --json
 ```
 
 `<source>` is a share link (`https://xd.adobe.com/view/...`), a `.xd` file, or a `document.json` from `xd redact`. Needs Node >= 22.

@@ -12,7 +12,7 @@ Output is **SVG only**. Angular gradients, background blur and inner shadows are
 ## Run the CLI
 
 ```bash
-npx -y xd-extract <command>      # or `xd <command>` when installed globally
+npx -y xd-extract@latest <command>      # or `xd <command>` when installed globally
 ```
 
 Needs Node >= 22. Commands: `inventory`, `extract`, `validate`, `redact`. `xd --help` lists every flag.

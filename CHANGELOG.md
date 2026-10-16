@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Fix: `xd validate` reported a false `nan-number` error when the base64 payload of an embedded image happened to contain the letters "NaN" (seen on the "Our Top Services" node of the public `single.xd` sample). Embedded `data:` URIs are no longer scanned.
+- The three skills now run `npx -y xd-extract@latest`. A bare `npx -y xd-extract` can reuse an older copy from the npx cache, which an agent would run without noticing (older versions skip text and report different frames).
 
 ## 0.2.2 (2026-10-16)
 
