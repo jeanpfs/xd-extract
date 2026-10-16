@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2 (2026-10-16)
+
+- Security: the transitive `esbuild` dependency is overridden to `>=0.28.1` (Dependabot alert). It is a build-time dependency; the published package is unaffected in behaviour.
+- Maintenance: `.nvmrc` pins Node 24 and `@types/node` is aligned to 24; governance files (issue templates, Dependabot, code of conduct) added. No converter changes.
+- The release workflow now checks `.claude-plugin/plugin.json` against the tag and updates an existing GitHub release instead of failing.
+
 ## 0.2.1 (2026-10-14)
 
 - Text strokes: a solid or gradient stroke on text is drawn on the `<text>` (colour, width, join, cap, dashes), centred; inside and outside alignment is reported as `stroke-align-ignored:*`. The frame grows by half the width. Seen once, in the tests-suite (solid, width 1); XD's own paint order was not checked.
